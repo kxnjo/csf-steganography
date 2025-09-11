@@ -9,13 +9,10 @@ def create_encode_tab(parent):
     left_frame = ctk.CTkFrame(frame, corner_radius=10, fg_color="gray20")
     left_frame.pack(side="left", expand=True, fill="both", padx=10, pady=10)
 
-    cover_label = DragDropLabel(left_frame, text="Upload Cover File")
+    cover_label = DragDropLabel(left_frame, text="Drag & Drop File \n OR \nBrowse File")
     cover_label.pack(pady=10)
-
-    payload_label = DragDropLabel(left_frame, text="Upload Payload File")
-    payload_label.pack(pady=10)
     
-    msg_label = ctk.CTkLabel(left_frame, text="Or Manually Enter Secret Message")
+    msg_label = ctk.CTkLabel(left_frame, text="Secret Message")
     msg_label.pack(anchor="w", padx=5)
     msg_entry = ctk.CTkTextbox(left_frame, height=100)
     msg_entry.pack(padx=5, pady=5, fill="x")
