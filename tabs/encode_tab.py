@@ -28,7 +28,7 @@ def create_encode_tab(parent):
 
     bits_label = ctk.CTkLabel(right_frame, text="Bits per Channel:")
     bits_label.pack(anchor="w", padx=5, pady=(5, 0))
-    bits_option = ctk.CTkOptionMenu(right_frame, values=["1 bit (Most secure)", "2 bits", "4 bits"])
+    bits_option = ctk.CTkOptionMenu(right_frame, values=["1 bit", "2 bits", "3 bits", "4 bits", "5 bits", "6 bits", "7 bits", "8 bits"])
     bits_option.pack(padx=5, pady=5, fill="x")
 
     start_label = ctk.CTkLabel(right_frame, text="Start Position:")
