@@ -35,7 +35,7 @@ def main():
     header = create_header(app)
     header.pack(fill="x")
 
-    notebook = ctk.CTkTabview(app, fg_color="gray15")  # match header/footer
+    notebook = ctk.CTkTabview(app, fg_color="gray15", corner_radius=15)
     notebook.pack(expand=True, fill="both", padx=0, pady=0)
 
     encode_tab = notebook.add("Encode")
