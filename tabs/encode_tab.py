@@ -11,16 +11,69 @@ def create_encode_tab(parent):
 
     cover_label = DragDropLabel(left_frame, text="Drag & Drop File \n OR \nBrowse File")
     cover_label.pack(pady=10)
-    
-    msg_label = ctk.CTkLabel(left_frame, text="Secret Message")
-    msg_label.pack(anchor="w", padx=5)
-    msg_entry = ctk.CTkTextbox(left_frame, height=100)
-    msg_entry.pack(padx=5, pady=5, fill="x")
 
-    key_label = ctk.CTkLabel(left_frame, text="Encryption Key")
+    # --- Secret Data Section ---
+    secret_frame = ctk.CTkFrame(left_frame, corner_radius=10, fg_color="gray25")
+    secret_frame.pack(expand=True, fill="x", padx=5, pady=10)
+
+    section_label = ctk.CTkLabel(secret_frame, text="Payload (Secret Data)")
+    section_label.pack(anchor="w", padx=5, pady=(5, 0))
+
+    # Tabs: Text Message / File Payload
+    tab_var = ctk.StringVar(value="Text Message")
+
+    tab_frame = ctk.CTkFrame(secret_frame, fg_color="transparent")
+    tab_frame.pack(fill="x", padx=5, pady=5)
+
+    text_tab_btn = ctk.CTkButton(tab_frame, text="Text Message", width=120, corner_radius=8)
+    text_tab_btn.pack(side="left", padx=(0, 5))
+
+    file_tab_btn = ctk.CTkButton(tab_frame, text="File Payload", width=120, corner_radius=8)
+    file_tab_btn.pack(side="left")
+
+    # Content container (switch between text/file)
+    content_frame = ctk.CTkFrame(secret_frame, fg_color="transparent")
+    content_frame.pack(fill="both", expand=True, padx=5, pady=5)
+
+    # Text Message box
+    msg_entry = ctk.CTkTextbox(content_frame, height=100)
+    msg_entry.pack(fill="x")
+
+    # File Payload (hidden until selected)
+    file_payload = DragDropLabel(content_frame, text="Drag & Drop File \n OR \nBrowse File")
+
+    # Function to update tabs & content
+    def update_tab():
+        # Clear content
+        for widget in content_frame.winfo_children():
+            widget.pack_forget()
+
+        # Update tab button colors (active = blue, inactive = grey)
+        if tab_var.get() == "Text Message":
+            text_tab_btn.configure(fg_color="dodgerblue", text_color="white")
+            file_tab_btn.configure(fg_color="gray30", text_color="gray80")
+            msg_entry.pack(fill="x")
+        else:
+            file_tab_btn.configure(fg_color="dodgerblue", text_color="white")
+            text_tab_btn.configure(fg_color="gray30", text_color="gray80")
+            file_payload.pack(fill="x", pady=10)
+
+    # Bind buttons
+    text_tab_btn.configure(command=lambda: (tab_var.set("Text Message"), update_tab()))
+    file_tab_btn.configure(command=lambda: (tab_var.set("File Payload"), update_tab()))
+
+    update_tab()  # Initialize state
+
+    # Encryption Key
+    key_label = ctk.CTkLabel(secret_frame, text="Encryption Key")
     key_label.pack(anchor="w", padx=5)
-    key_entry = ctk.CTkEntry(left_frame, show="*")
+    key_entry = ctk.CTkEntry(secret_frame, show="*")
     key_entry.pack(padx=5, pady=5, fill="x")
+
+    note_label = ctk.CTkLabel(secret_frame, text="This key will be required for decoding the payload",
+                              font=ctk.CTkFont(size=10, slant="italic"))
+    note_label.pack(anchor="w", padx=5, pady=(0, 5))
+    # --- End Secret Section ---
 
     # Right panel
     right_frame = ctk.CTkFrame(frame, corner_radius=10, fg_color="gray20")
@@ -28,7 +81,8 @@ def create_encode_tab(parent):
 
     bits_label = ctk.CTkLabel(right_frame, text="Bits per Channel:")
     bits_label.pack(anchor="w", padx=5, pady=(5, 0))
-    bits_option = ctk.CTkOptionMenu(right_frame, values=["1 bit", "2 bits", "3 bits", "4 bits", "5 bits", "6 bits", "7 bits", "8 bits"])
+    bits_option = ctk.CTkOptionMenu(right_frame, values=[
+        "1 bit", "2 bits", "3 bits", "4 bits", "5 bits", "6 bits", "7 bits", "8 bits"])
     bits_option.pack(padx=5, pady=5, fill="x")
 
     start_label = ctk.CTkLabel(right_frame, text="Start Position:")
