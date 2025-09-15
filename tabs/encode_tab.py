@@ -9,8 +9,16 @@ def create_encode_tab(parent):
     left_frame = ctk.CTkFrame(frame, corner_radius=10, fg_color="gray20")
     left_frame.pack(side="left", expand=True, fill="both", padx=10, pady=10)
 
-    cover_label = DragDropLabel(left_frame, text="Drag & Drop File \n OR \nBrowse File")
-    cover_label.pack(pady=10)
+    # --- Cover Image Section ---
+    cover_frame = ctk.CTkFrame(left_frame, corner_radius=10, fg_color="gray25")
+    cover_frame.pack(expand=True, fill="x", padx=5, pady=10)
+
+    cover_label_title = ctk.CTkLabel(cover_frame, text="Cover Image")
+    cover_label_title.pack(anchor="w", padx=5, pady=(5, 0))
+
+    cover_label = DragDropLabel(cover_frame, text="Drag & Drop File \n OR \nBrowse File")
+    cover_label.pack(padx=5, pady=10, fill="x")
+    # --- End Cover Image Section ---
 
     # --- Secret Data Section ---
     secret_frame = ctk.CTkFrame(left_frame, corner_radius=10, fg_color="gray25")
@@ -42,27 +50,33 @@ def create_encode_tab(parent):
     # File Payload (hidden until selected)
     file_payload = DragDropLabel(content_frame, text="Drag & Drop File \n OR \nBrowse File")
 
+    # Function to reset file payload label (restore original text)
+    def reset_file_payload():
+        file_payload.configure(text="Drag & Drop File \n OR \nBrowse File")
+
     # Function to update tabs & content
     def update_tab():
-        # Clear content
         for widget in content_frame.winfo_children():
             widget.pack_forget()
 
-        # Update tab button colors (active = blue, inactive = grey)
         if tab_var.get() == "Text Message":
             text_tab_btn.configure(fg_color="dodgerblue", text_color="white")
             file_tab_btn.configure(fg_color="gray30", text_color="gray80")
+            msg_entry.configure(state="normal")
+            reset_file_payload()
             msg_entry.pack(fill="x")
         else:
             file_tab_btn.configure(fg_color="dodgerblue", text_color="white")
             text_tab_btn.configure(fg_color="gray30", text_color="gray80")
+            msg_entry.delete("1.0", "end")
+            msg_entry.configure(state="disabled")
             file_payload.pack(fill="x", pady=10)
 
     # Bind buttons
     text_tab_btn.configure(command=lambda: (tab_var.set("Text Message"), update_tab()))
     file_tab_btn.configure(command=lambda: (tab_var.set("File Payload"), update_tab()))
 
-    update_tab()  # Initialize state
+    update_tab()
 
     # Encryption Key
     key_label = ctk.CTkLabel(secret_frame, text="Encryption Key")
