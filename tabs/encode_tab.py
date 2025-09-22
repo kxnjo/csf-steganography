@@ -2,9 +2,11 @@ import customtkinter as ctk
 from tkinter import messagebox
 from dragdrop import DragDropLabel
 from image_encoder import encode_message as encode_image_message
-from audio_encoder import file_to_bits, embed_payload, wavfile
+from audio_encoder import file_to_bits, embed_payload
+from scipy.io import wavfile  # Fixed import
 import os
 import numpy as np
+import tempfile  # For creating temporary files for text payloads
 
 def create_encode_tab(parent):
     frame = ctk.CTkFrame(parent, fg_color="transparent")
@@ -95,16 +97,24 @@ def create_encode_tab(parent):
             if not key_text:
                 raise ValueError("Enter an encryption key.")
 
+            # Validate key is integer (required for audio encoding)
+            try:
+                key_int = int(key_text)
+            except ValueError:
+                raise ValueError("Encryption key must be a valid integer.")
+
             cover_ext = os.path.splitext(cover_path)[1].lower()
 
             if cover_ext in [".png", ".jpg", ".jpeg", ".bmp", ".gif"]:
                 # --- Image encoding ---
                 if tab_var.get() == "Text Message":
                     message = msg_entry.get("1.0", "end").strip()
+                    if not message:
+                        raise ValueError("Enter a message to encode.")
                 else:
                     payload_path = file_payload.get_file_path()
-                    if not payload_path:
-                        raise ValueError("Select a payload file.")
+                    if not payload_path or not os.path.isfile(payload_path):
+                        raise ValueError("Select a valid payload file.")
                     with open(payload_path, "rb") as f:
                         file_bytes = f.read()
                     message = file_bytes.decode("latin1")  # keep original bytes
@@ -113,21 +123,50 @@ def create_encode_tab(parent):
 
             elif cover_ext == ".wav":
                 # --- Audio encoding ---
-                payload_path = file_payload.get_file_path()
-                if not payload_path:
-                    raise ValueError("Select a payload file for audio.")
-                samplerate, audio_data = wavfile.read(cover_path)
-                if audio_data.dtype != np.int16:
-                    audio_data = audio_data.astype(np.int16)
-                audio_data = audio_data.copy()
-                payload_bits = file_to_bits(payload_path)
-                stego_data = embed_payload(audio_data, payload_bits, num_lsb, int(key_text))
-                base_name = os.path.splitext(cover_path)[0]
-                output_path = f"{base_name}_stego.wav"
-                wavfile.write(output_path, samplerate, stego_data)
+                # For audio, we need to create a payload file regardless of text/file selection
+                if tab_var.get() == "Text Message":
+                    # Create temporary file with text message
+                    message = msg_entry.get("1.0", "end").strip()
+                    if not message:
+                        raise ValueError("Enter a message to encode.")
+                    
+                    # Create temporary file
+                    temp_file = tempfile.NamedTemporaryFile(mode='w', delete=False, encoding='utf-8')
+                    temp_file.write(message)
+                    temp_file.close()
+                    payload_path = temp_file.name
+                    is_temp_file = True
+                else:
+                    payload_path = file_payload.get_file_path()
+                    if not payload_path or not os.path.isfile(payload_path):
+                        raise ValueError("Select a valid payload file.")
+                    is_temp_file = False
+
+                try:
+                    # Read cover audio
+                    samplerate, audio_data = wavfile.read(cover_path)
+                    if audio_data.dtype != np.int16:
+                        audio_data = audio_data.astype(np.int16)
+                    audio_data = audio_data.copy()
+                    
+                    # Read payload bits using your audio_encoder function
+                    payload_bits = file_to_bits(payload_path)
+                    
+                    # Embed payload using your audio_encoder function
+                    stego_data = embed_payload(audio_data, payload_bits, num_lsb, key_int)
+                    
+                    # Save stego audio
+                    base_name = os.path.splitext(cover_path)[0]
+                    output_path = f"{base_name}_stego.wav"
+                    wavfile.write(output_path, samplerate, stego_data)
+                    
+                finally:
+                    # Clean up temporary file if we created one
+                    if tab_var.get() == "Text Message" and is_temp_file:
+                        os.unlink(payload_path)
 
             else:
-                raise ValueError("Unsupported cover file type.")
+                raise ValueError("Unsupported cover file type. Use images (.png, .jpg, .bmp) or audio (.wav)")
 
             messagebox.showinfo("Success", f"✅ Payload encoded!\nSaved at:\n{output_path}")
 
