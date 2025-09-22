@@ -1,64 +1,51 @@
 import customtkinter as ctk
+from tkinter import messagebox
 from dragdrop import DragDropLabel
+from image_encoder import encode_message as encode_image_message
+from audio_encoder import file_to_bits, embed_payload, wavfile
+import os
+import numpy as np
 
 def create_encode_tab(parent):
     frame = ctk.CTkFrame(parent, fg_color="transparent")
     frame.pack(expand=True, fill="both")
 
-    # Left panel
+    # ---------------- Left Panel ----------------
     left_frame = ctk.CTkFrame(frame, corner_radius=10, fg_color="gray20")
     left_frame.pack(side="left", expand=True, fill="both", padx=10, pady=10)
 
-    # --- Cover Image Section ---
+    # --- Cover File Section ---
     cover_frame = ctk.CTkFrame(left_frame, corner_radius=10, fg_color="gray25")
     cover_frame.pack(expand=True, fill="x", padx=5, pady=10)
-
-    cover_label_title = ctk.CTkLabel(cover_frame, text="Cover Image")
-    cover_label_title.pack(anchor="w", padx=5, pady=(5, 0))
-
+    ctk.CTkLabel(cover_frame, text="Cover File").pack(anchor="w", padx=5, pady=(5, 0))
     cover_label = DragDropLabel(cover_frame, text="Drag & Drop File \n OR \nBrowse File")
     cover_label.pack(padx=5, pady=10, fill="x")
-    # --- End Cover Image Section ---
 
     # --- Secret Data Section ---
     secret_frame = ctk.CTkFrame(left_frame, corner_radius=10, fg_color="gray25")
     secret_frame.pack(expand=True, fill="x", padx=5, pady=10)
+    ctk.CTkLabel(secret_frame, text="Payload (Secret Data)").pack(anchor="w", padx=5, pady=(5, 0))
 
-    section_label = ctk.CTkLabel(secret_frame, text="Payload (Secret Data)")
-    section_label.pack(anchor="w", padx=5, pady=(5, 0))
-
-    # Tabs: Text Message / File Payload
     tab_var = ctk.StringVar(value="Text Message")
-
     tab_frame = ctk.CTkFrame(secret_frame, fg_color="transparent")
     tab_frame.pack(fill="x", padx=5, pady=5)
-
     text_tab_btn = ctk.CTkButton(tab_frame, text="Text Message", width=120, corner_radius=8)
     text_tab_btn.pack(side="left", padx=(0, 5))
-
     file_tab_btn = ctk.CTkButton(tab_frame, text="File Payload", width=120, corner_radius=8)
     file_tab_btn.pack(side="left")
 
-    # Content container (switch between text/file)
     content_frame = ctk.CTkFrame(secret_frame, fg_color="transparent")
     content_frame.pack(fill="both", expand=True, padx=5, pady=5)
-
-    # Text Message box
     msg_entry = ctk.CTkTextbox(content_frame, height=100)
     msg_entry.pack(fill="x")
-
-    # File Payload (hidden until selected)
     file_payload = DragDropLabel(content_frame, text="Drag & Drop File \n OR \nBrowse File")
 
-    # Function to reset file payload label (restore original text)
     def reset_file_payload():
         file_payload.configure(text="Drag & Drop File \n OR \nBrowse File")
 
-    # Function to update tabs & content
     def update_tab():
         for widget in content_frame.winfo_children():
             widget.pack_forget()
-
         if tab_var.get() == "Text Message":
             text_tab_btn.configure(fg_color="dodgerblue", text_color="white")
             file_tab_btn.configure(fg_color="gray30", text_color="gray80")
@@ -72,40 +59,82 @@ def create_encode_tab(parent):
             msg_entry.configure(state="disabled")
             file_payload.pack(fill="x", pady=10)
 
-    # Bind buttons
     text_tab_btn.configure(command=lambda: (tab_var.set("Text Message"), update_tab()))
     file_tab_btn.configure(command=lambda: (tab_var.set("File Payload"), update_tab()))
-
     update_tab()
 
     # Encryption Key
-    key_label = ctk.CTkLabel(secret_frame, text="Encryption Key")
-    key_label.pack(anchor="w", padx=5)
+    ctk.CTkLabel(secret_frame, text="Encryption Key").pack(anchor="w", padx=5)
     key_entry = ctk.CTkEntry(secret_frame, show="*")
     key_entry.pack(padx=5, pady=5, fill="x")
+    ctk.CTkLabel(secret_frame, text="This key will be required for decoding the payload",
+                  font=ctk.CTkFont(size=10, slant="italic")).pack(anchor="w", padx=5, pady=(0,5))
 
-    note_label = ctk.CTkLabel(secret_frame, text="This key will be required for decoding the payload",
-                              font=ctk.CTkFont(size=10, slant="italic"))
-    note_label.pack(anchor="w", padx=5, pady=(0, 5))
-    # --- End Secret Section ---
-
-    # Right panel
+    # ---------------- Right Panel ----------------
     right_frame = ctk.CTkFrame(frame, corner_radius=10, fg_color="gray20")
     right_frame.pack(side="right", expand=True, fill="both", padx=10, pady=10)
-
-    bits_label = ctk.CTkLabel(right_frame, text="Bits per Channel:")
-    bits_label.pack(anchor="w", padx=5, pady=(5, 0))
-    bits_option = ctk.CTkOptionMenu(right_frame, values=[
-        "1 bit", "2 bits", "3 bits", "4 bits", "5 bits", "6 bits", "7 bits", "8 bits"])
+    ctk.CTkLabel(right_frame, text="Bits per Channel:").pack(anchor="w", padx=5, pady=(5,0))
+    bits_option = ctk.CTkOptionMenu(right_frame, values=[f"{i} bit" for i in range(1,9)])
+    bits_option.set("1 bit")
     bits_option.pack(padx=5, pady=5, fill="x")
-
-    start_label = ctk.CTkLabel(right_frame, text="Start Position:")
-    start_label.pack(anchor="w", padx=5, pady=(10, 0))
+    ctk.CTkLabel(right_frame, text="Start Position:").pack(anchor="w", padx=5, pady=(10,0))
     start_entry = ctk.CTkEntry(right_frame)
     start_entry.insert(0, "0")
     start_entry.pack(padx=5, pady=5, fill="x")
 
-    encode_btn = ctk.CTkButton(right_frame, text="Encode Message", fg_color="green")
+    # --- Encode button callback ---
+    def run_encode():
+        try:
+            cover_path = cover_label.get_file_path()
+            key_text = key_entry.get().strip()
+            num_lsb = int(bits_option.get().split()[0])
+            start_pos = int(start_entry.get())
+
+            if not cover_path or not os.path.isfile(cover_path):
+                raise ValueError("Select a valid cover file.")
+            if not key_text:
+                raise ValueError("Enter an encryption key.")
+
+            cover_ext = os.path.splitext(cover_path)[1].lower()
+
+            if cover_ext in [".png", ".jpg", ".jpeg", ".bmp", ".gif"]:
+                # --- Image encoding ---
+                if tab_var.get() == "Text Message":
+                    message = msg_entry.get("1.0", "end").strip()
+                else:
+                    payload_path = file_payload.get_file_path()
+                    if not payload_path:
+                        raise ValueError("Select a payload file.")
+                    with open(payload_path, "rb") as f:
+                        file_bytes = f.read()
+                    message = file_bytes.decode("latin1")  # keep original bytes
+
+                output_path = encode_image_message(cover_path, message, key_text, num_lsb, start_pos)
+
+            elif cover_ext == ".wav":
+                # --- Audio encoding ---
+                payload_path = file_payload.get_file_path()
+                if not payload_path:
+                    raise ValueError("Select a payload file for audio.")
+                samplerate, audio_data = wavfile.read(cover_path)
+                if audio_data.dtype != np.int16:
+                    audio_data = audio_data.astype(np.int16)
+                audio_data = audio_data.copy()
+                payload_bits = file_to_bits(payload_path)
+                stego_data = embed_payload(audio_data, payload_bits, num_lsb, int(key_text))
+                base_name = os.path.splitext(cover_path)[0]
+                output_path = f"{base_name}_stego.wav"
+                wavfile.write(output_path, samplerate, stego_data)
+
+            else:
+                raise ValueError("Unsupported cover file type.")
+
+            messagebox.showinfo("Success", f"✅ Payload encoded!\nSaved at:\n{output_path}")
+
+        except Exception as e:
+            messagebox.showerror("Error", str(e))
+
+    encode_btn = ctk.CTkButton(right_frame, text="Encode Message", fg_color="green", command=run_encode)
     encode_btn.pack(pady=20)
 
     return frame
