@@ -1,8 +1,8 @@
 import customtkinter as ctk
 from tkinter import messagebox
-from dragdrop import DragDropLabel
-from image_encoder import encode_message as encode_image_message
-from audio_encoder import file_to_bits, embed_payload
+from assets.dragdrop import DragDropLabel
+from encoder_decoder.image_encoder import encode_message as encode_image_message
+from encoder_decoder.audio_encoder import file_to_bits, embed_payload
 from scipy.io import wavfile  # Fixed import
 import os
 import numpy as np
