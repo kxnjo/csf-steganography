@@ -24,8 +24,8 @@ def main():
     app.protocol("WM_DELETE_WINDOW", on_closing)
 
     # import and build your UI
-    from header import create_header
-    from footer import create_footer
+    from assets.header import create_header
+    from assets.footer import create_footer
     from tabs.encode_tab import create_encode_tab
     from tabs.decode_tab import create_decode_tab
     from tabs.compare_tab import create_compare_tab
