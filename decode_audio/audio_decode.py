@@ -42,7 +42,7 @@ def bits_to_file(bits, filename):
 # --------------------------
 # Extract payload using shuffled indices
 # --------------------------
-def extract_payload(audio_data, num_bits, num_lsb, key, offset=0):
+def decode_audio(audio_data, num_bits, num_lsb, key, offset=0):
     num_samples = len(audio_data)
     print(f"Number of audio samples: {num_samples}")
     print(f"Total bits available for hiding: {(num_samples - offset) * num_lsb}")
@@ -123,7 +123,7 @@ if __name__ == "__main__":
 
     # Step 3: Extract payload
     print("\nExtracting payload bits...")
-    extracted_bits = extract_payload(audio_data, payload_length_bits, num_lsb, key, offset=header_sample_count)
+    extracted_bits = decode_audio(audio_data, payload_length_bits, num_lsb, key, offset=header_sample_count)
     print(f"Number of bits extracted: {len(extracted_bits)}")
     print(f"First 32 extracted bits: {extracted_bits[:32]}")
 
