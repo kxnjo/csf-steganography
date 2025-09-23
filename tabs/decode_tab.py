@@ -1,5 +1,8 @@
 import customtkinter as ctk
 from dragdrop import DragDropLabel
+from decode_audio.audio_decode import extract_payload
+from tkinter import messagebox  
+import chardet
 
 def create_decode_tab(parent):
     frame = ctk.CTkFrame(parent, fg_color="transparent")
@@ -27,4 +30,35 @@ def create_decode_tab(parent):
     msg_output = ctk.CTkTextbox(right_frame, height=150)
     msg_output.pack(padx=5, pady=5, fill="both", expand=True)
 
+    def on_decode():
+        filepath = cover_label.filepath
+        key = key_entry.get()
+
+        if not filepath or not key:
+            messagebox.showerror("Error", "Select a file and enter a key")
+            return
+
+        try:
+            data = extract_payload(filepath, key)
+
+            try:
+                # Try decoding as UTF-8 text
+                message_str = data.decode('utf-8')
+            except UnicodeDecodeError:
+                # If it fails, save as binary
+                with open("output.bin", "wb") as f:
+                    f.write(data)
+                message_str = "<Binary data saved to output.bin>"
+
+            msg_output.delete("1.0", "end")
+            msg_output.insert("end", message_str)
+
+        except Exception as e:
+            messagebox.showerror("Error", str(e))
+
+
+    decode_btn.configure(command=on_decode)
+
     return frame
+
+

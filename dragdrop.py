@@ -17,6 +17,8 @@ class DragDropLabel(ctk.CTkLabel):
     def __init__(self, parent, text="Drag & Drop or Click to Select File", on_drop=None, **kwargs):
         super().__init__(parent, text=text, **kwargs)
 
+        self.filepath = None
+
         self.default_text = text
         self.on_drop = on_drop
 
@@ -46,6 +48,13 @@ class DragDropLabel(ctk.CTkLabel):
         filtered_files = [
             f for f in dropped_files if f.lower().endswith(self.ACCEPTED_EXTENSIONS)
         ]
+
+        if filtered_files:
+            self.filepath = filtered_files[0]  # store first file path
+            self.configure(text=self._shorten_name(os.path.basename(self.filepath)))
+        else:
+            self.filepath = None
+            self.configure(text="Unsupported file type or empty drop")
 
         display_items = [self._shorten_name(os.path.basename(f)) for f in filtered_files] + dropped_texts
         if display_items:
@@ -82,6 +91,7 @@ class DragDropLabel(ctk.CTkLabel):
             ]
         )
         if filepath:
+            self.filepath = filepath
             self.configure(text=os.path.basename(filepath))
             if self.on_drop:
                 self.on_drop([filepath])

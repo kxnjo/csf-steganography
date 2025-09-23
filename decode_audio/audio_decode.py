@@ -90,8 +90,9 @@ def extract_header(audio_data, num_bits, num_lsb):
 # --------------------------
 if __name__ == "__main__":
     stego_file = "stego_audio.wav"
-    output_file = "extracted_payload.bin"
-    num_lsb = 1
+    # need to edit the file extension based on the file type or smth
+    output_file = "extracted_payload.pdf"
+    num_lsb = 8
     key = 5
 
     if not os.path.isfile(stego_file):
