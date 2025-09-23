@@ -13,7 +13,7 @@ def main():
 
     app = CTkDnD()
     app.title("LSB Steganography Tool")
-    app.geometry("900x720")
+    app.geometry("1100x1000")
     
     # --- Safe close handler ---
     def on_closing():
@@ -24,11 +24,11 @@ def main():
     app.protocol("WM_DELETE_WINDOW", on_closing)
 
     # import and build your UI
-    from header import create_header
-    from footer import create_footer
+    from assets.header import create_header
+    from assets.footer import create_footer
     from tabs.encode_tab import create_encode_tab
     from tabs.decode_tab import create_decode_tab
-    from tabs.compare_tab import create_compare_tab
+    # from tabs.compare_tab import create_compare_tab
     from tabs.analysis_tab import create_analysis_tab
 
     # build layout (like you did before)
@@ -40,12 +40,12 @@ def main():
 
     encode_tab = notebook.add("Encode")
     decode_tab = notebook.add("Decode")
-    compare_tab = notebook.add("Compare")
+    # compare_tab = notebook.add("Compare")
     analysis_tab = notebook.add("Steganalysis")
 
     create_encode_tab(encode_tab)
     create_decode_tab(decode_tab)
-    create_compare_tab(compare_tab)
+    # create_compare_tab(compare_tab)
     create_analysis_tab(analysis_tab)
 
     footer = create_footer(app)

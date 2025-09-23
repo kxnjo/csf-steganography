@@ -21,6 +21,9 @@ class DragDropLabel(ctk.CTkLabel):
 
         self.default_text = text
         self.on_drop = on_drop
+        self.file_path = None  # <-- store the selected file path
+        if hasattr(self, "on_file_selected") and callable(self.on_file_selected):
+            self.on_file_selected(self.file_path)
 
         # Fixed size and wrap long filenames
         self.fixed_width = kwargs.get("width", 300)
@@ -50,23 +53,26 @@ class DragDropLabel(ctk.CTkLabel):
         ]
 
         if filtered_files:
-            self.filepath = filtered_files[0]  # store first file path
-            self.configure(text=self._shorten_name(os.path.basename(self.filepath)))
-        else:
-            self.filepath = None
-            self.configure(text="Unsupported file type or empty drop")
-
-        display_items = [self._shorten_name(os.path.basename(f)) for f in filtered_files] + dropped_texts
-        if display_items:
+            self.file_path = filtered_files[0]  # save first valid file
+            display_items = [self._shorten_name(os.path.basename(f)) for f in filtered_files]
             self.configure(text="\n".join(display_items))
+        elif dropped_texts:
+            self.file_path = None  # Not a file
+            self.configure(text="\n".join(dropped_texts))
         else:
+            self.file_path = None
             self.configure(text="Unsupported file type or empty drop")
 
         if self.on_drop:
             self.on_drop(filtered_files + dropped_texts)
 
+        # check again to ensure that you update the file path
+        if hasattr(self, "on_file_selected") and callable(self.on_file_selected):
+            self.on_file_selected(self.file_path)
+
     def _on_drag_leave(self, event):
-        self.configure(text=self.default_text)
+        if not self.file_path:
+            self.configure(text=self.default_text)
 
     def _parse_drop(self, data):
         items = self.tk.splitlist(data)
@@ -91,16 +97,22 @@ class DragDropLabel(ctk.CTkLabel):
             ]
         )
         if filepath:
-            self.filepath = filepath
+            self.file_path = filepath  # save chosen path
             self.configure(text=os.path.basename(filepath))
             if self.on_drop:
                 self.on_drop([filepath])
 
     def _clear(self, event=None):
-        """Clear the label text"""
+        """Clear the label text and reset file path"""
+        self.file_path = None
         self.configure(text=self.default_text)
         if self.on_drop:
             self.on_drop([])
 
     def _show_menu(self, event):
         self.menu.tk_popup(event.x_root, event.y_root)
+
+    # --- New public method ---
+    def get_file_path(self):
+        """Return the last selected/dropped file path, or None if empty."""
+        return self.file_path
