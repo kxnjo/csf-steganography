@@ -13,7 +13,7 @@ def main():
 
     app = CTkDnD()
     app.title("LSB Steganography Tool")
-    app.geometry("900x720")
+    app.geometry("1100x1000")
     
     # --- Safe close handler ---
     def on_closing():
