@@ -7,8 +7,34 @@ from scipy.io import wavfile  # Fixed import
 import os
 import numpy as np
 import tempfile  # For creating temporary files for text payloads
+from PIL import Image
 
 def create_encode_tab(parent):
+    def update_preview(path):
+        ext = os.path.splitext(path)[1].lower()
+        if ext in [".png", ".jpg", ".jpeg", ".bmp", ".gif"]:
+            img = Image.open(path)
+            img.thumbnail((250, 250))
+            img_ctk = ctk.CTkImage(light_image=img, dark_image=img, size=(250, 250))
+            preview_label.configure(image=img_ctk, text="")
+            preview_label.image = img_ctk
+        elif ext == ".wav":
+            preview_label.configure(
+                text=f"Audio file loaded:\n{os.path.basename(path)}",
+                image=None
+            )
+        else:
+            preview_label.configure(
+                text=f"Unsupported preview:\n{os.path.basename(path)}",
+                image=None
+            )
+    
+    def set_cover_path():
+        cover_path = cover_label.get_file_path()
+        # update the side preview window
+        if cover_path and os.path.isfile(cover_path):
+            update_preview(cover_path)
+
     frame = ctk.CTkFrame(parent, fg_color="transparent")
     frame.pack(expand=True, fill="both")
 
@@ -22,6 +48,11 @@ def create_encode_tab(parent):
     ctk.CTkLabel(cover_frame, text="Cover File").pack(anchor="w", padx=5, pady=(5, 0))
     cover_label = DragDropLabel(cover_frame, text="Drag & Drop File \n OR \nBrowse File")
     cover_label.pack(padx=5, pady=10, fill="x")
+    def on_cover_file_selected(path):
+        if path and os.path.isfile(path):
+            update_preview(path)
+
+    cover_label.on_file_selected = on_cover_file_selected # indicate that it is selected or not
 
     # --- Secret Data Section ---
     secret_frame = ctk.CTkFrame(left_frame, corner_radius=10, fg_color="gray25")
@@ -60,6 +91,7 @@ def create_encode_tab(parent):
             msg_entry.delete("1.0", "end")
             msg_entry.configure(state="disabled")
             file_payload.pack(fill="x", pady=10)
+        set_cover_path() # update preview window
 
     text_tab_btn.configure(command=lambda: (tab_var.set("Text Message"), update_tab()))
     file_tab_btn.configure(command=lambda: (tab_var.set("File Payload"), update_tab()))
@@ -75,6 +107,16 @@ def create_encode_tab(parent):
     # ---------------- Right Panel ----------------
     right_frame = ctk.CTkFrame(frame, corner_radius=10, fg_color="gray20")
     right_frame.pack(side="right", expand=True, fill="both", padx=10, pady=10)
+
+    # --- Cover Preview Section ---
+    preview_frame = ctk.CTkFrame(right_frame, corner_radius=10, fg_color="gray25")
+    preview_frame.pack(expand=True, fill="both", padx=5, pady=10)
+    ctk.CTkLabel(preview_frame, text="Cover Preview").pack(anchor="w", padx=5, pady=(5, 0))
+    preview_label = ctk.CTkLabel(preview_frame, text="No file selected", anchor="center")
+    preview_label.pack(expand=True, fill="both", padx=5, pady=5)
+
+    # functoins for preview section at the top
+
     ctk.CTkLabel(right_frame, text="Bits per Channel:").pack(anchor="w", padx=5, pady=(5,0))
     bits_option = ctk.CTkOptionMenu(right_frame, values=[f"{i} bit" for i in range(1,9)])
     bits_option.set("1 bit")

@@ -20,6 +20,8 @@ class DragDropLabel(ctk.CTkLabel):
         self.default_text = text
         self.on_drop = on_drop
         self.file_path = None  # <-- store the selected file path
+        if hasattr(self, "on_file_selected") and callable(self.on_file_selected):
+            self.on_file_selected(self.file_path)
 
         # Fixed size and wrap long filenames
         self.fixed_width = kwargs.get("width", 300)
@@ -61,6 +63,10 @@ class DragDropLabel(ctk.CTkLabel):
 
         if self.on_drop:
             self.on_drop(filtered_files + dropped_texts)
+
+        # check again to ensure that you update the file path
+        if hasattr(self, "on_file_selected") and callable(self.on_file_selected):
+            self.on_file_selected(self.file_path)
 
     def _on_drag_leave(self, event):
         if not self.file_path:
