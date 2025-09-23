@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 import io
 import simpleaudio as sa
 
-# from assets.ScrollableFrame import ScrollableFrame  # custom scrollable frame
+from assets.ScrollableFrame import ScrollableFrame  # custom scrollable frame
 
 # keep global/state reference to current audio
 current_play_obj = None
@@ -76,12 +76,12 @@ def create_encode_tab(parent):
             )
 
     # --- frame setup ---
-    frame = ctk.CTkFrame(parent, fg_color="transparent")
-    frame.pack(expand=True, fill="both")
+    # frame = ctk.CTkFrame(parent, fg_color="transparent")
+    # frame.pack(expand=True, fill="both")
 
-    # scroll_frame = ScrollableFrame(parent, fg_color="white")
-    # scroll_frame.pack(expand=True, fill="both")
-    # frame = scroll_frame.scrollable_frame  # use this as your main container
+    scroll_frame = ScrollableFrame(parent, fg_color="gray20")
+    scroll_frame.pack(expand=True, fill="both")
+    frame = scroll_frame.scrollable_frame  # use this as your main container
 
     # ---------------- Left Panel ----------------
     left_frame = ctk.CTkFrame(frame, corner_radius=10, fg_color="gray20")
