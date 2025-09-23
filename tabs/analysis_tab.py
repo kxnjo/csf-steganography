@@ -1,5 +1,5 @@
 import customtkinter as ctk
-from dragdrop import DragDropLabel
+from assets.dragdrop import DragDropLabel
 
 def create_analysis_tab(parent):
     frame = ctk.CTkFrame(parent, fg_color="transparent")

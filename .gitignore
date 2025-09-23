@@ -2,3 +2,5 @@
 __pycache__/*
 tabs/__pycache__/*
 assets/__pycache__/*
+encoder_decoder/__pycache__/*
+.DS_Store

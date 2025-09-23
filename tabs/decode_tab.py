@@ -1,8 +1,8 @@
 import customtkinter as ctk
-from dragdrop import DragDropLabel
+from assets.dragdrop import DragDropLabel
 import os
 from tkinter import messagebox, filedialog
-from image_decoder import decode_image
+from encoder_decoder.image_decoder import decode_image
 import numpy as np
 from scipy.io import wavfile
 import random
