@@ -21,6 +21,9 @@ import math
 import numpy.fft as fft  # phase coding detection
 from scipy.signal import correlate  # echo detection
 
+# import similarity comparison (for final suspicion)
+from skimage.metrics import structural_similarity as ssim
+
 # detect if it is an image (or exceptable file forms)
 IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".bmp", ".gif")
 AUDIO_EXTS = (".wav", ".mp3", ".flac", ".ogg")
@@ -103,61 +106,52 @@ def create_stat_card(parent, title, value, subtitle="", color="white"):
     return card
 
 
-def show_stats(original, suspect, container):
-    # pixel difference %
-    diff = np.abs(suspect - original)
-    changed_pixels = np.count_nonzero(diff)
-    total_pixels = diff.size
-    diff_percent = (changed_pixels / total_pixels) * 100
-
-    # entropy
-    orig_entropy = shannon_entropy(original)
-    suspect_entropy = shannon_entropy(suspect)
-
-    # chi-square on histograms
-    orig_hist, _ = np.histogram(original, bins=256, range=(0, 255))
-    suspect_hist, _ = np.histogram(suspect, bins=256, range=(0, 255))
-    chi, p = chisquare(f_obs=suspect_hist + 1, f_exp=orig_hist + 1)
-
-    # Clear old widgets
-    for widget in container.winfo_children():
-        widget.destroy()
-
-    # Pack stat cards horizontally
+def show_stats(original, suspect, container, mode="image"):
+    # Clear old cards row
+    for w in container.winfo_children():
+        w.destroy()
     row = ctk.CTkFrame(container, fg_color="transparent")
     row.pack(fill="x", pady=5)
 
-    create_stat_card(
-        row,
-        "Pixel Difference",
-        f"{diff_percent:.2f}%",
-        f"Changed pixels vs total: {changed_pixels}/{total_pixels}",
-        color="orange",
-    )
+    if mode == "image":
+        # pixel difference %
+        diff = np.abs(suspect - original)
+        changed_pixels = int(np.count_nonzero(diff))
+        total_pixels = int(diff.size)
+        diff_percent = (changed_pixels / max(1,total_pixels)) * 100
 
-    create_stat_card(
-        row,
-        "Entropy (Original)",
-        f"{orig_entropy:.3f} bits",
-        "Information content of cover",
-        color="cyan",
-    )
+        # entropy (image)
+        orig_entropy = shannon_entropy(original)
+        suspect_entropy = shannon_entropy(suspect)
 
-    create_stat_card(
-        row,
-        "Entropy (Suspect)",
-        f"{suspect_entropy:.3f} bits",
-        "Information content of stego",
-        color="cyan",
-    )
+        # χ² (image bins)
+        ho, _ = np.histogram(original, bins=256, range=(0,255))
+        hs, _ = np.histogram(suspect,  bins=256, range=(0,255))
+        chi, p = chisquare(f_obs=hs + 1, f_exp=ho + 1)
 
-    create_stat_card(
-        row,
-        "Chi-Square",
-        f"{chi:.2f}",
-        f"p = {p:.3e}",
-        color="lightgreen" if p > 0.05 else "red",
-    )
+    else:
+        # audio: quantize to 8-bit for entropy/χ²
+        qo = quantize_audio_8bit(original)
+        qs = quantize_audio_8bit(suspect)
+
+        # “diff %” → use sample match rate
+        changed_pixels = int(np.count_nonzero(qo != qs))
+        total_pixels   = int(qo.size)
+        diff_percent   = (changed_pixels / max(1,total_pixels)) * 100
+
+        orig_entropy   = shannon_entropy(qo)
+        suspect_entropy= shannon_entropy(qs)
+
+        ho, _ = np.histogram(qo, bins=256, range=(0,255))
+        hs, _ = np.histogram(qs, bins=256, range=(0,255))
+        chi, p = chisquare(f_obs=hs + 1, f_exp=ho + 1)
+
+    # Cards
+    create_stat_card(row, "Diff %", f"{diff_percent:.2f}%", f"Changed: {changed_pixels}/{total_pixels}", "orange")
+    create_stat_card(row, "Entropy (Orig.)", f"{orig_entropy:.3f} bits", "", "cyan")
+    create_stat_card(row, "Entropy (Sus.)", f"{suspect_entropy:.3f} bits", "", "cyan")
+    create_stat_card(row, "Chi-Square", f"{chi:.2f}", f"p = {p:.3e}", "lightgreen" if p > 0.05 else "red")
+
 
 
 # --- to view visual comparison in differece ---
@@ -369,6 +363,144 @@ def show_spectrogram(original, suspect, result_label, rate=44100):
     result_label.image = img_ctk
 
 
+# = = = SUSPICION SCORE = = =
+# --- HELPERS ---
+def normalize_metric(value, min_val, max_val):
+    """Scale value → [0,1] with clipping."""
+    if max_val == min_val: 
+        return 0.0
+    return float(np.clip((value - min_val) / (max_val - min_val), 0, 1))
+
+def quantize_audio_8bit(x):
+    """Assumes x is float in [-1,1]; returns uint8 0..255 for entropy/χ²."""
+    x = np.nan_to_num(x, nan=0.0, posinf=0.0, neginf=0.0)
+    x = np.clip(x, -1.0, 1.0)
+    q = np.round(((x + 1.0) * 0.5) * 255).astype(np.uint8)
+    return q
+
+def lsb_flip_rate(img_a, img_b):
+    """Fraction of pixels whose LSB differs."""
+    a = img_a.astype(np.uint8) & 1
+    b = img_b.astype(np.uint8) & 1
+    return np.mean(a != b)
+
+def residual_energy(arr):
+    """Mean absolute residual after wavelet denoise; higher → more high-freq noise."""
+    res = arr - denoise_wavelet(arr, channel_axis=None, mode="soft")
+    return float(np.mean(np.abs(res)))
+
+def block_chi_heatmap_values(original, suspect, block_size=16):
+    """Compute χ² per block (no drawing), return array of χ² values."""
+    h, w = original.shape
+    H = math.ceil(h / block_size); W = math.ceil(w / block_size)
+    heat = np.zeros((H, W), dtype=np.float32)
+    for i in range(0, h, block_size):
+        for j in range(0, w, block_size):
+            bo = original[i:min(i+block_size, h), j:min(j+block_size, w)]
+            bs = suspect[i:min(i+block_size, h), j:min(j+block_size, w)]
+            if bo.size < 4 or bs.size < 4: 
+                continue
+            ho, _ = np.histogram(bo, bins=256, range=(0,255))
+            hs, _ = np.histogram(bs, bins=256, range=(0,255))
+            chi, _ = chisquare(f_obs=hs + 1, f_exp=ho + 1)
+            heat[i//block_size, j//block_size] = chi
+    return heat
+
+# --- actual calculations ---
+def calculate_image_suspicion(original, suspect):
+    # 1) SSIM (1 - SSIM → more suspicious)
+    ssim_val = ssim(original, suspect, data_range=255)
+    ssim_score = normalize_metric(1.0 - ssim_val, 0.0, 0.4)   # >0.4 diff = strong
+
+    # 2) LSB flip-rate
+    lsb_rate = lsb_flip_rate(original, suspect)               # 0..1
+    lsb_score = normalize_metric(lsb_rate, 0.0, 0.2)          # >20% flips is big
+
+    # 3) Block χ² (use 90th percentile to focus on hotspots)
+    heat = block_chi_heatmap_values(original, suspect, block_size=16)
+    if np.max(heat) > 0:
+        chi_p90 = np.percentile(heat, 90)
+        chi_score = normalize_metric(chi_p90, 0.0, np.max(heat))
+    else:
+        chi_score = 0.0
+
+    # 4) Residual energy increase
+    re_o = residual_energy(original)
+    re_s = residual_energy(suspect)
+    re_ratio = (re_s / re_o) if re_o > 1e-9 else 1.0
+    resid_score = normalize_metric(re_ratio, 1.0, 1.5)        # +50% residual → suspicious
+
+    # Combine (heavier weight on ssim & lsb)
+    suspicion = 0.35*ssim_score + 0.35*lsb_score + 0.2*chi_score + 0.10*resid_score
+    return float(np.clip(suspicion, 0, 1))
+
+
+def spectral_flatness(x, nfft=2048):
+    """0..1; 1=white-noise-like, 0=tonal. We use rfft power spectrum."""
+    x = np.nan_to_num(x).astype(np.float32)
+    if x.size == 0: 
+        return 0.0
+    X = np.fft.rfft(x, n=nfft)
+    P = np.abs(X)**2 + 1e-12
+    gm = np.exp(np.mean(np.log(P)))
+    am = np.mean(P)
+    return float(gm / am)
+
+def calculate_audio_suspicion(original, suspect, rate):
+    # Quantize for entropy/χ²
+    qo = quantize_audio_8bit(original)
+    qs = quantize_audio_8bit(suspect)
+
+    # Entropy diff (quantized)
+    ent_o = shannon_entropy(qo)
+    ent_s = shannon_entropy(qs)
+    ent_diff = abs(ent_s - ent_o)
+    ent_score = normalize_metric(ent_diff, 0.0, 0.4)
+
+    # χ² on quantized histograms
+    ho, _ = np.histogram(qo, bins=256, range=(0,255))
+    hs, _ = np.histogram(qs, bins=256, range=(0,255))
+    chi, p = chisquare(f_obs=hs + 1, f_exp=ho + 1)
+    chi_score = 1 - float(np.clip(p*10, 0, 1))  # small p → suspicious
+
+    # Phase/echo/noise
+    phase_std = np.std(np.diff(np.angle(np.fft.fft(suspect))))
+    phase_score = normalize_metric(phase_std, 0.0, 1.0)
+
+    echo_flag, _ = check_echo_presence(suspect)
+    echo_score = 1.0 if echo_flag else 0.0
+
+    rms = check_noise_floor(suspect)
+    rms_score = normalize_metric(rms, 0.0, 0.05)
+
+    # Spectral flatness delta
+    sf_o = spectral_flatness(original)
+    sf_s = spectral_flatness(suspect)
+    sf_score = normalize_metric(sf_s - sf_o, 0.0, 0.15)
+
+    # Combine (heavier χ² + phase/echo; entropy/rms/sf assist)
+    suspicion = (
+        0.30*chi_score + 0.20*phase_score + 0.20*echo_score +
+        0.15*sf_score  + 0.10*ent_score   + 0.05*rms_score
+    )
+    return float(np.clip(suspicion, 0, 1))
+
+def add_suspicion_card(container, score):
+    print("SUS CARD IS HERE")
+    if score >= 0.6:
+        color = "red"
+        verdict = "Highly Likely Stego"
+    elif score >= 0.3:
+        color = "orange"
+        verdict = "Suspicious"
+    else:
+        color = "lightgreen"
+        verdict = "Likely Clean"
+
+    create_stat_card(container, "Suspicion Score", f"{score:.2f}", verdict, color)
+    print("sus card done i think")
+
+
 # = = = PARENT FUNC ACTUAL SHOWING = = =
 
 
@@ -387,7 +519,7 @@ def run_comparison(original_label, suspect_label, bottom_frame):
     # 1. compare if the original and suspect path is uploaded
     if not original_path or not suspect_path:
         print("⚠️ Please select both files before comparing.")
-            # --- add Compare button back ---
+        # --- add Compare button back ---
         compare_btn = ctk.CTkButton(
             bottom_frame,
             text="Compare Files",
@@ -396,8 +528,8 @@ def run_comparison(original_label, suspect_label, bottom_frame):
         )
         compare_btn.pack(pady=10)
         return
-    
-     # --- add Compare button back ---
+
+    # --- add Compare button back ---
     compare_btn = ctk.CTkButton(
         bottom_frame,
         text="Compare Files",
@@ -443,10 +575,21 @@ def run_comparison(original_label, suspect_label, bottom_frame):
             print(f"Error loading audios: {e}")
             return
 
+    # 4. This is the final widget to show final suspicion score
+    suspicious_container = ctk.CTkFrame(bottom_frame, fg_color="transparent")
+    suspicious_container.pack(fill="x", padx=10, pady=10)
+    if mode == "image":
+        score = calculate_image_suspicion(original, suspect)
+        add_suspicion_card(suspicious_container, score)
+    else:
+        score = calculate_audio_suspicion(original, suspect, sus_rate)
+        add_suspicion_card(suspicious_container, score)
+
+    # 5. show all the default widgets
     # --- stats container (row of cards) ---
     stats_container = ctk.CTkFrame(bottom_frame, fg_color="transparent")
     stats_container.pack(fill="x", padx=10, pady=10)
-    show_stats(original, suspect, stats_container)
+    show_stats(original, suspect, stats_container, mode)
 
     # --- histogram container ---
     # histogram
@@ -462,7 +605,7 @@ def run_comparison(original_label, suspect_label, bottom_frame):
     else:
         show_histogram(original, suspect, hist_label, bins=100)
 
-    # 5. load all of the widgets (based on file type)
+    # 6. load all of the widgets (based on file type)
     if mode == "image":
         # --- row for chi-square + residual ---
         row_frame = ctk.CTkFrame(bottom_frame, fg_color="transparent")
@@ -697,9 +840,7 @@ def create_compare_tab(parent):
         bottom_frame,
         text="Compare Files",
         fg_color="orange",
-        command=lambda: run_comparison(
-            orig_label, stego_label, bottom_frame
-        ),
+        command=lambda: run_comparison(orig_label, stego_label, bottom_frame),
     )
     compare_btn.pack(pady=10)
 
