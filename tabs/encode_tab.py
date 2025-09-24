@@ -12,7 +12,7 @@ from PIL import Image # to load image preview
 import wave
 import matplotlib.pyplot as plt
 import io
-import simpleaudio as sa
+# import simpleaudio as sa
 
 from assets.ScrollableFrame import ScrollableFrame  # custom scrollable frame
 
