@@ -9,6 +9,13 @@ from scipy.io import wavfile
 import random
 import mimetypes
 
+from PIL import Image # to load image preview
+import wave
+import matplotlib.pyplot as plt
+import io
+
+from assets.ScrollableFrame import ScrollableFrame  # custom scrollable frame
+
 # Improved Audio decoder functions
 def extract_payload_with_termination(stego_audio, num_lsb, key):
     """Extract payload bits, stopping when we find consecutive null bytes"""
@@ -120,8 +127,66 @@ def decode_wav_file_improved(stego_file, num_lsb, key):
         return b''
 
 def create_decode_tab(parent):
-    frame = ctk.CTkFrame(parent, fg_color="transparent")
-    frame.pack(expand=True, fill="both")
+    def update_preview(path, label):
+        ext = os.path.splitext(path)[1].lower()
+        # base default for images
+        if ext in [".png", ".jpg", ".jpeg", ".bmp", ".gif"]:
+            img = Image.open(path)
+            img.thumbnail((250, 250))
+            img_ctk = ctk.CTkImage(light_image=img, dark_image=img, size=(250, 250))
+            label.configure(image=img_ctk, text="")
+            label.image = img_ctk
+
+        # for audio waves
+        elif ext == ".wav":
+            # 1. get audio information (audio text)
+            with wave.open(path, "rb") as wf:
+                duration = wf.getnframes() / wf.getframerate()
+                info_text = (f"Audio file loaded:\n{os.path.basename(path)}\n"
+                         f"{wf.getnchannels()} ch, {wf.getframerate()} Hz, {duration:.1f}s")
+                label.configure(
+                    text=info_text,
+                    image=None
+                )
+            
+            # 2. load up the waveform preview from scipy
+            samplerate, audio_data = wavfile.read(path)
+            if audio_data.ndim > 1:  # stereo → use first channel
+                audio_data = audio_data[:, 0]
+
+            # 3. plot waveform
+            fig, ax = plt.subplots(figsize=(3, 1), dpi=100)
+            ax.plot(audio_data, linewidth=0.5, color="dodgerblue")
+            ax.set_axis_off()
+            plt.tight_layout(pad=0)
+
+            # Save plot to memory
+            buf = io.BytesIO()
+            plt.savefig(buf, format="png")
+            plt.close(fig)
+            buf.seek(0)
+
+            # Convert waveform image to CTkImage
+            img = Image.open(buf)
+            img_ctk = ctk.CTkImage(light_image=img, dark_image=img, size=(250, 80))
+
+            # Update preview
+            label.configure(image=img_ctk, text=info_text, compound="top")
+            label.image = img_ctk
+
+        # for others
+        else:
+            label.configure(
+                text=f"Unsupported preview:\n{os.path.basename(path)}",
+                image=None
+            )
+
+    # frame = ctk.CTkFrame(parent, fg_color="transparent")
+    # frame.pack(expand=True, fill="both")
+
+    scroll_frame = ScrollableFrame(parent, fg_color="gray20")
+    scroll_frame.pack(expand=True, fill="both")
+    frame = scroll_frame.scrollable_frame  # use this as your main container
 
     # ---------------- Left Panel ----------------
     left_frame = ctk.CTkFrame(frame, corner_radius=10, fg_color="gray20")
@@ -140,6 +205,17 @@ def create_decode_tab(parent):
         height=120
     )
     cover_label.pack(padx=5, pady=10, fill="x")
+
+    cover_preview_frame = ctk.CTkFrame(left_frame, corner_radius=10, fg_color="gray25")
+    cover_preview_frame.pack(expand=True, fill="both", padx=5, pady=5)
+    ctk.CTkLabel(cover_preview_frame, text="Original Preview").pack(anchor="w", padx=5, pady=(5, 0))
+    cover_preview_label = ctk.CTkLabel(cover_preview_frame, text="No file selected", anchor="center")
+    cover_preview_label.pack(expand=True, fill="both", padx=5, pady=5)
+    def on_original_file_selected(path):
+        if path and os.path.isfile(path):
+            update_preview(path, cover_preview_label)
+
+    cover_label.on_file_selected = on_original_file_selected # indicate that it is selected or not
 
     # Decoding Options Section
     options_frame = ctk.CTkFrame(left_frame, corner_radius=10, fg_color="gray25")
