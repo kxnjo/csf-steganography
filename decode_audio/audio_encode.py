@@ -12,7 +12,7 @@ def file_to_bits(filename):
     bits = []
     for byte in byte_array:
         for i in range(8):
-            bits.append((byte >> (7-i)) & 1)  # MSB first
+            bits.append((byte >> (7 - i)) & 1)  # MSB first
     return bits
 
 def bits_to_file(bits, filename):
@@ -28,7 +28,6 @@ def bits_to_file(bits, filename):
         bytes_out.append(byte)
     with open(filename, "wb") as f:
         f.write(bytes_out)
-
 
 def embed_header(audio_data, header_bits, num_lsb):
     """Embed header bits sequentially into the first samples"""
@@ -86,7 +85,6 @@ if __name__ == "__main__":
 
     # Read cover audio
     samplerate, audio_data = wavfile.read(cover_file)
-    # Convert to mutable integer array if needed
     if audio_data.dtype != np.int16:
         audio_data = audio_data.astype(np.int16)
     audio_data = audio_data.copy()
@@ -94,9 +92,23 @@ if __name__ == "__main__":
     # Read payload
     payload_bits = file_to_bits(payload_file)
 
-    # Embed
-    stego_data = embed_payload(audio_data, payload_bits, num_lsb, key)
+    # Create 32-bit header
+    payload_size = len(payload_bits)
+    header_bits = [(payload_size >> (31 - i)) & 1 for i in range(32)]
+
+    print("Header bits embedded:", header_bits)
+    print("Original payload size:", len(payload_bits))
+
+
+    # Embed header sequentially
+    audio_data = embed_header(audio_data, header_bits, num_lsb)
+
+    # Calculate how many samples were used for header
+    header_sample_count = (32 + num_lsb - 1) // num_lsb
+
+    # Embed payload using shuffled indices, skipping header samples
+    stego_data = embed_payload(audio_data, payload_bits, num_lsb, key, offset=header_sample_count)
 
     # Save stego audio
     wavfile.write("stego_audio.wav", samplerate, stego_data)
-    print("Stego audio saved as 'stego_audio.wav'.")
+    print("✅ Stego audio saved as 'stego_audio.wav'.")

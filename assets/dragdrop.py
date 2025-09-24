@@ -17,6 +17,8 @@ class DragDropLabel(ctk.CTkLabel):
     def __init__(self, parent, text="Drag & Drop or Click to Select File", on_drop=None, **kwargs):
         super().__init__(parent, text=text, **kwargs)
 
+        self.filepath = None
+
         self.default_text = text
         self.on_drop = on_drop
         self.file_path = None  # <-- store the selected file path

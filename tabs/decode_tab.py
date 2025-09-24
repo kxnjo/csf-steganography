@@ -3,6 +3,7 @@ from assets.dragdrop import DragDropLabel
 import os
 from tkinter import messagebox, filedialog
 from encoder_decoder.image_decoder import decode_image
+from encoder_decoder.audio_decode import decode_wav_file_gui
 import numpy as np
 from scipy.io import wavfile
 import random
@@ -306,8 +307,8 @@ def create_decode_tab(parent):
                     key_int = int(key_text)
                 except ValueError:
                     raise ValueError("For audio files, encryption key must be a valid integer.")
-                
-                payload_bytes = decode_wav_file_improved(stego_path, num_lsb, key_int)
+                # run decode audio here
+                payload_bytes = decode_wav_file_gui(stego_path, num_lsb, key_int)
                 
             elif ext in [".png", ".jpg", ".jpeg", ".bmp", ".gif"]:
                 payload_bytes, _ = decode_image(stego_path, key_text)
