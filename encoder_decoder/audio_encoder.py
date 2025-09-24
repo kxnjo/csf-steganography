@@ -29,16 +29,32 @@ def bits_to_file(bits, filename):
     with open(filename, "wb") as f:
         f.write(bytes_out)
 
-def embed_payload(cover_audio, payload_bits, num_lsb, key):
-    """Embed payload bits into audio samples using key"""
-    audio_data = cover_audio.copy()
+
+def embed_header(audio_data, header_bits, num_lsb):
+    """Embed header bits sequentially into the first samples"""
+    bit_idx = 0
+    for i in range(len(audio_data)):
+        sample = audio_data[i]
+        for l in range(num_lsb):
+            if bit_idx >= len(header_bits):
+                break
+            sample = sample & ~(1 << l)
+            sample = sample | (header_bits[bit_idx] << l)
+            bit_idx += 1
+        audio_data[i] = sample
+        if bit_idx >= len(header_bits):
+            break
+    return audio_data
+
+def embed_payload(audio_data, payload_bits, num_lsb, key, offset=0):
+    """Embed payload bits into audio samples using shuffled indices"""
+    audio_data = audio_data.copy()
     num_samples = len(audio_data)
-    
-    if len(payload_bits) > num_samples * num_lsb:
+
+    if len(payload_bits) > (num_samples - offset) * num_lsb:
         raise ValueError("Payload too large for the chosen LSBs")
 
-    # Generate shuffled indices based on key
-    indices = list(range(num_samples))
+    indices = list(range(offset, num_samples))  # skip header samples
     random.seed(key)
     random.shuffle(indices)
 
@@ -48,7 +64,6 @@ def embed_payload(cover_audio, payload_bits, num_lsb, key):
         for l in range(num_lsb):
             if bit_idx >= len(payload_bits):
                 break
-            # Clear LSB l and set it to payload bit
             sample = sample & ~(1 << l)
             sample = sample | (payload_bits[bit_idx] << l)
             bit_idx += 1

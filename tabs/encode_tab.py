@@ -2,7 +2,7 @@ import customtkinter as ctk
 from tkinter import messagebox
 from assets.dragdrop import DragDropLabel
 from encoder_decoder.image_encoder import encode_message as encode_image_message
-from encoder_decoder.audio_encoder import file_to_bits, embed_payload
+from encoder_decoder.audio_encoder import file_to_bits, embed_payload, embed_header
 from scipy.io import wavfile  # Fixed import
 import os
 import numpy as np
@@ -236,9 +236,19 @@ def create_encode_tab(parent):
                     
                     # Read payload bits using your audio_encoder function
                     payload_bits = file_to_bits(payload_path)
+
+                    # Create 32-bit header
+                    payload_size = len(payload_bits)
+                    header_bits = [(payload_size >> (31 - i)) & 1 for i in range(32)]
+
+                    # Embed header sequentially
+                    audio_data = embed_header(audio_data, header_bits, num_lsb)
                     
+                    # Calculate how many samples were used for header
+                    header_sample_count = (32 + num_lsb - 1) // num_lsb
+
                     # Embed payload using your audio_encoder function
-                    stego_data = embed_payload(audio_data, payload_bits, num_lsb, key_int)
+                    stego_data = embed_payload(audio_data, payload_bits, num_lsb, key_int, offset=header_sample_count)
                     
                     # Save stego audio
                     base_name = os.path.splitext(cover_path)[0]

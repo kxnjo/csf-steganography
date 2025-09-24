@@ -85,6 +85,50 @@ def extract_header(audio_data, num_bits, num_lsb):
             break
     return bits
 
+
+# return as bits
+
+def decode_wav_file_gui(stego_path, num_lsb, key):
+    print(f"stego path: {stego_path}")
+    print(f"num_lsb: {num_lsb}")
+    print(f"key: {key}")
+    """Wrapper to return decoded bytes instead of writing to file."""
+    samplerate, audio_data = wavfile.read(stego_path)
+    if len(audio_data.shape) > 1:
+        audio_data = audio_data[:, 0]  # use first channel
+    if audio_data.dtype != np.int16:
+        audio_data = audio_data.astype(np.int16)
+    audio_data = audio_data.copy()
+
+    # Step 1: Extract header
+    print("\nExtracting header...")
+    header_bits = extract_header(audio_data, 32, num_lsb)
+    print(f"Header bits extracted: {header_bits[:32]}")
+
+    payload_length_bits = 0
+    for bit in header_bits:
+        payload_length_bits = (payload_length_bits << 1) | bit
+    print(f"Payload length in bits (extracted from header): {payload_length_bits}")
+
+    # Step 2: Calculate header sample count
+    header_sample_count = (32 + num_lsb - 1) // num_lsb
+
+    # Step 3: Extract payload
+    extracted_bits = decode_audio(audio_data, payload_length_bits, num_lsb, key, offset=header_sample_count)
+
+    # Step 4: Convert bits to bytes
+    decoded_bytes = bytearray()
+    for i in range(0, len(extracted_bits), 8):
+        byte_val = 0
+        for j in range(8):
+            if i + j < len(extracted_bits):
+                byte_val = (byte_val << 1) | extracted_bits[i + j]
+            else:
+                byte_val = byte_val << 1
+        decoded_bytes.append(byte_val)
+
+    return bytes(decoded_bytes)
+
 # --------------------------
 # Main decoder
 # --------------------------
