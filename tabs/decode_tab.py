@@ -3,7 +3,7 @@ from assets.dragdrop import DragDropLabel
 import os
 from tkinter import messagebox, filedialog
 from encoder_decoder.image_decoder import decode_image
-from decode_audio.audio_decode import decode_wav_file_gui
+from encoder_decoder.audio_decode import decode_wav_file_gui
 import numpy as np
 from scipy.io import wavfile
 import random
