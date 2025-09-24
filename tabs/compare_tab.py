@@ -31,7 +31,7 @@ def display_image(frame, path):
     label.pack(padx=10, pady=10)
     return label
 
-
+# --- histogram ---
 def show_histogram(original, suspect, result_label):
     fig, ax = plt.subplots(1, 2, figsize=(6, 3), dpi=100)
 
@@ -53,7 +53,7 @@ def show_histogram(original, suspect, result_label):
     result_label.configure(image=img_ctk, text="")
     result_label.image = img_ctk
 
-
+# --- show lsb ---
 def show_lsb_map(original, suspect, result_label):
     # extract least significant bit (LSB) plane
     orig_lsb = original & 1
@@ -139,40 +139,19 @@ def show_stats(original, suspect, container):
     )
 
 # --- to view visual comparison in differece ---
-def visual_comparison(original_path, suspect_path, frame): 
-    """ 
-        Directly subtracts the pixel values between original and suspect, 
-        normalizes, and shows differences as brightness.
-        Every pixel that changed shows up in the map.
-        Brighter = bigger pixel difference.
-    """
-    try:
-        original = np.array(Image.open(original_path).convert('L'))
-        suspect = np.array(Image.open(suspect_path).convert('L'))
-    except Exception as e:
-        print(f"Error loading images: {e}")
-        return
-
-    # compute difference
+def show_visual_comparison(original, suspect, result_label):
+    """ Show pixel-wise visual difference as brightness map. """
     diff = np.abs(suspect - original)
-    diff_scaled = (diff / diff.max()) * 255  # normalize to 0–255
+    if diff.max() > 0:
+        diff_scaled = (diff / diff.max()) * 255
+    else:
+        diff_scaled = diff
 
-    # convert numpy array → PIL image
     diff_img = Image.fromarray(diff_scaled.astype(np.uint8))
-
-    # resize for GUI (adjust size as needed)
     img_ctk = ctk.CTkImage(light_image=diff_img, dark_image=diff_img, size=(400, 300))
 
-    # update result label
-    visual_difference_frame = ctk.CTkFrame(frame, corner_radius=10, fg_color="gray25")
-    visual_difference_frame.pack(expand=True, fill="both", padx=5, pady=5)
-    ctk.CTkLabel(visual_difference_frame, text="Visual Difference Preview").pack(anchor="w", padx=5, pady=(5, 0))
-    visual_difference_label = ctk.CTkLabel(visual_difference_frame, text="", anchor="center")
-    visual_difference_label.pack(expand=True, fill="both", padx=5, pady=5)
-
-    # load the image
-    visual_difference_label.configure(image=img_ctk, text="")  
-    visual_difference_label.image = img_ctk  # keep reference so it doesn’t get GC’d
+    result_label.configure(image=img_ctk, text="")
+    result_label.image = img_ctk
 
 # --- heatmap of suspicious areas ---
 def show_chisquare_heatmap(original, suspect, result_label, block_size=16):
@@ -219,10 +198,33 @@ def show_chisquare_heatmap(original, suspect, result_label, block_size=16):
     except Exception as e:
         print(f"Error in chi-square heatmap: {e}")
 
+def noise_residual_heatmap(suspect, result_label):
+    try:
+        # Compute noise residual via wavelet denoising
+        residual = suspect - denoise_wavelet(suspect, channel_axis=None, mode="soft")
 
-def noise_residual_heatmap(suspect):
-    residual = suspect - denoise_wavelet(suspect, channel_axis=None, mode="soft")
-    plt.imshow(np.abs(residual), cmap="hot")
+        # Plot residual heatmap
+        fig, ax = plt.subplots(figsize=(4, 3), dpi=100)
+        ax.imshow(np.abs(residual), cmap="hot")
+        ax.axis("off")
+        plt.tight_layout(pad=0)
+
+        # Save to memory buffer
+        buf = io.BytesIO()
+        plt.savefig(buf, format="png")
+        plt.close(fig)
+        buf.seek(0)
+
+        # Convert to CTkImage
+        img = Image.open(buf)
+        img_ctk = ctk.CTkImage(light_image=img, dark_image=img, size=(400, 300))
+
+        # Display in result_label
+        result_label.configure(image=img_ctk, text="")
+        result_label.image = img_ctk
+
+    except Exception as e:
+        print(f"Error in noise_residual_heatmap: {e}")
 
 # --- parent func to call the other comparisons ---
 def run_comparison(original_path, suspect_path, bottom_frame):
@@ -257,26 +259,51 @@ def run_comparison(original_path, suspect_path, bottom_frame):
     # --- histogram container ---
     hist_frame = ctk.CTkFrame(bottom_frame, corner_radius=10, fg_color="gray25")
     hist_frame.pack(expand=True, fill="both", padx=5, pady=5)
+    ctk.CTkLabel(hist_frame, text="Histogram Comparison", font=("Arial", 14, "bold")).pack(anchor="w", padx=10, pady=(5,0))
     hist_label = ctk.CTkLabel(hist_frame, text="")
     hist_label.pack(expand=True, fill="both", padx=5, pady=5)
     show_histogram(original, suspect, hist_label)
 
-    # --- lsb container ---
-    lsb_frame = ctk.CTkFrame(bottom_frame, corner_radius=10, fg_color="gray25")
-    lsb_frame.pack(expand=True, fill="both", padx=5, pady=5)
+    # --- row for chi-square + residual ---
+    row_frame = ctk.CTkFrame(bottom_frame, fg_color="transparent")
+    row_frame.pack(expand=True, fill="both", padx=5, pady=5)
+
+    # configure row_frame as 3 equal columns
+    row_frame.grid_columnconfigure((0, 1), weight=1)  
+    row_frame.grid_rowconfigure((0, 1), weight=1)
+
+    # --- Visual Difference ---
+    visual_difference_frame = ctk.CTkFrame(row_frame, corner_radius=10, fg_color="gray25")
+    visual_difference_frame.grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
+    ctk.CTkLabel(visual_difference_frame, text="Visual Difference", font=("Arial", 14, "bold")).pack(anchor="w", padx=10, pady=(5,0))
+    visual_difference_label = ctk.CTkLabel(visual_difference_frame, text="")
+    visual_difference_label.pack(expand=True, fill="both", padx=5, pady=5)
+    show_visual_comparison(original, suspect, visual_difference_label)
+
+    # --- LSB Map ---
+    lsb_frame = ctk.CTkFrame(row_frame, corner_radius=10, fg_color="gray25")
+    lsb_frame.grid(row=0, column=1, sticky="nsew", padx=5, pady=5)
+    ctk.CTkLabel(lsb_frame, text="LSB Map", font=("Arial", 14, "bold")).pack(anchor="w", padx=10, pady=(5,0))
     lsb_label = ctk.CTkLabel(lsb_frame, text="")
     lsb_label.pack(expand=True, fill="both", padx=5, pady=5)
     show_lsb_map(original, suspect, lsb_label)
 
-    # --- chi-square heatmap container ---
-    heatmap_frame = ctk.CTkFrame(bottom_frame, corner_radius=10, fg_color="gray25")
-    heatmap_frame.pack(expand=True, fill="both", padx=5, pady=5)
+    # --- chi-square heatmap ---
+    heatmap_frame = ctk.CTkFrame(row_frame, corner_radius=10, fg_color="gray25")
+    heatmap_frame.grid(row=1, column=0, sticky="nsew", padx=5, pady=5)
+    ctk.CTkLabel(heatmap_frame, text="Chi-Square Heatmap", font=("Arial", 14, "bold")).pack(anchor="w", padx=10, pady=(5,0))
     heatmap_label = ctk.CTkLabel(heatmap_frame, text="")
     heatmap_label.pack(expand=True, fill="both", padx=5, pady=5)
     show_chisquare_heatmap(original, suspect, heatmap_label)
 
     # --- noise residual heatmap ---
-    noise_residual_heatmap
+    residual_frame = ctk.CTkFrame(row_frame, corner_radius=10, fg_color="gray25")
+    residual_frame.grid(row=1, column=1, sticky="nsew", padx=5, pady=5)
+    ctk.CTkLabel(residual_frame, text="Noise Residual Heatmap", font=("Arial", 14, "bold")).pack(anchor="w", padx=10, pady=(5,0))
+    residual_label = ctk.CTkLabel(residual_frame, text="")
+    residual_label.pack(expand=True, fill="both", padx=5, pady=5)
+    noise_residual_heatmap(suspect, residual_label)
+
 
 
 def create_compare_tab(parent):
