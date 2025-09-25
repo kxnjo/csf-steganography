@@ -167,7 +167,62 @@ def create_encode_tab(parent):
     start_entry = ctk.CTkEntry(left_frame)
     start_entry.insert(0, "0")
     start_entry.pack(padx=5, pady=5, fill="x")
+    
+    # ---------------- Cover Capacity Label ----------------
+    capacity_label = ctk.CTkLabel(left_frame, text="Cover Capacity: N/A", anchor="w")
+    capacity_label.pack(fill="x", padx=5, pady=(5,0))
+    
+    # ---------------- Cover Capacity Update ----------------
+    from assets.cover_capacity import check_fit 
 
+    def update_cover_capacity():
+        cover_path = cover_label.get_file_path()
+        try:
+            num_lsb = int(bits_option.get().split()[0])
+
+            # Determine payload bytes
+            if tab_var.get() == "Text Message":
+                payload_bytes = msg_entry.get("1.0", "end").strip().encode("utf-8")
+            else:
+                payload_path = file_payload.get_file_path()
+                if payload_path and os.path.isfile(payload_path):
+                    with open(payload_path, "rb") as f:
+                        payload_bytes = f.read()
+                else:
+                    payload_bytes = b""
+
+            result = check_fit(cover_path, num_lsb, payload_bytes)
+            max_bits = result["max_bits"]
+            payload_bits = result["payload_bits"]
+            fit_text = "✅ Fits" if result["fit"] else "❌ Too Large"
+
+            if max_bits is None:
+                capacity_label.configure(text="Cover Capacity: Unsupported file")
+            else:
+                capacity_label.configure(
+                    text=f"Cover Capacity: {max_bits} bits | Payload: {payload_bits} bits | {fit_text}"
+                )
+
+        except Exception:
+            capacity_label.configure(text="Cover Capacity: Error")
+
+
+    # ---------------- Bindings to update capacity ----------------
+    # Update when cover file changes (drag-drop or file dialog)
+    cover_label.on_file_selected = lambda path: (update_preview(path, preview_label), update_cover_capacity())
+
+    # Update when LSB selection changes
+    bits_option.configure(command=lambda _: update_cover_capacity())
+
+    # Update when payload text changes
+    def on_msg_modified(event):
+        msg_entry.edit_modified(0)  # reset modified flag
+        update_cover_capacity()
+
+    msg_entry.bind("<<Modified>>", on_msg_modified)
+
+    # Update when payload file changes
+    file_payload.on_file_selected = lambda path: update_cover_capacity()
     # --- Encode button callback ---
     def run_encode():
         print("PRESSED !! started")
