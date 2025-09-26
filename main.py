@@ -29,7 +29,6 @@ def main():
     from tabs.encode_tab import create_encode_tab
     from tabs.decode_tab import create_decode_tab
     from tabs.compare_tab import create_compare_tab
-    from tabs.analysis_tab import create_analysis_tab
 
     # build layout (like you did before)
     header = create_header(app)
@@ -41,12 +40,10 @@ def main():
     encode_tab = notebook.add("Encode")
     decode_tab = notebook.add("Decode")
     compare_tab = notebook.add("Compare")
-    analysis_tab = notebook.add("Steganalysis")
 
     create_encode_tab(encode_tab)
     create_decode_tab(decode_tab)
     create_compare_tab(compare_tab)
-    create_analysis_tab(analysis_tab)
 
     footer = create_footer(app)
     footer.pack(fill="x")
