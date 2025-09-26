@@ -234,7 +234,7 @@ def create_encode_tab(parent):
                         audio_data = audio_data.astype(np.int16)
                     audio_data = audio_data.copy()
                     
-                    # Read payload bits using your audio_encoder function
+                    # Read payload bits using audio_encoder function
                     payload_bits = file_to_bits(payload_path)
 
                     # Create 32-bit header
