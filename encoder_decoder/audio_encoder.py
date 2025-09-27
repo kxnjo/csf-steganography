@@ -47,25 +47,32 @@ def embed_header(audio_data, header_bits, num_lsb):
     return audio_data
 
 def embed_payload(audio_data, payload_bits, num_lsb, key, offset=0):
-    """Embed payload bits into audio samples using shuffled indices"""
+    """Embed payload bits into audio samples using shuffled indices and key-based bit positions"""
+    print("encoding.....")
     audio_data = audio_data.copy()
     num_samples = len(audio_data)
 
     if len(payload_bits) > (num_samples - offset) * num_lsb:
         raise ValueError("Payload too large for the chosen LSBs")
 
-    indices = list(range(offset, num_samples))  # skip header samples
+    # shuffle sample order based on key
+    indices = list(range(offset, num_samples))
     random.seed(key)
     random.shuffle(indices)
+
+    # choose which LSB positions to use inside each sample (based on key)
+    bit_positions = list(range(8))
+    random.shuffle(bit_positions)
+    bit_positions = bit_positions[:num_lsb]
 
     bit_idx = 0
     for sample_idx in indices:
         sample = audio_data[sample_idx]
-        for l in range(num_lsb):
+        for l in bit_positions:
             if bit_idx >= len(payload_bits):
                 break
-            sample = sample & ~(1 << l)
-            sample = sample | (payload_bits[bit_idx] << l)
+            sample = sample & ~(1 << l)                  # clear bit
+            sample = sample | (payload_bits[bit_idx] << l) # set bit
             bit_idx += 1
         audio_data[sample_idx] = sample
         if bit_idx >= len(payload_bits):
