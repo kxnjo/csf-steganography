@@ -34,6 +34,8 @@ def decode_audio(audio_data, num_bits, num_lsb, key, offset=0):
     # number of samples in audio data array
     num_samples = len(audio_data)
 
+    print(f"[DEOCDE] number of bits: {num_bits}")
+
     # num_bits -> size of payload
     # num_samples -> total number of samples in audio
     if num_bits > (num_samples - offset) * num_lsb:
@@ -44,10 +46,15 @@ def decode_audio(audio_data, num_bits, num_lsb, key, offset=0):
     # when encoding, the random.seed is used to encode to hide data better
     # so when decoding, we have to use the same way to "reverse" the hidden data
 
-    # ensure randomization always happeni n the same way as long as used same key
+    # ensure randomization always happen in the same way as long as used same key
     random.seed(key)
-    # 
+    
     random.shuffle(number_list)
+
+    # Shuffle bit positions the same way as encoder
+    bit_positions = list(range(8))
+    random.shuffle(bit_positions)
+    bit_positions = bit_positions[:num_lsb]
 
     bits = []
     bit_idx = 0
@@ -55,7 +62,7 @@ def decode_audio(audio_data, num_bits, num_lsb, key, offset=0):
     # just that this is the hidden msg
     for index in number_list:
         sample = audio_data[index]
-        for l in range(num_lsb):
+        for l in bit_positions:
             if bit_idx >= num_bits:
                 break
             bits.append((sample >> l) & 1)
@@ -65,12 +72,14 @@ def decode_audio(audio_data, num_bits, num_lsb, key, offset=0):
 
     return bits
 
-# reads the first few samples to extract 32-bit header (defined when encode)
+# reads the first few samples to extract 48-bit header (defined when encode)
 # bits returned -> how many bits of hidden data are embedded
 # reads LSB of samples to reconstruct the payload size 
 def extract_header(audio_data, num_bits, num_lsb):
     bits = []
     bit_idx = 0
+
+    print(f"number of header bits: {num_bits}")
 
     # loops through the audio samples 
     for samplevalue in audio_data:
@@ -115,7 +124,7 @@ def extract_header(audio_data, num_bits, num_lsb):
             # bits -> each value inside is the lsb value of the sample value after shifting & extracting lsb
             bits.append((samplevalue >> i) & 1)
             bit_idx += 1
-        # loops for max 32 times -> after 32 then break out
+        # loops for max 48 times -> after 48 then break out
         if bit_idx >= num_bits:
             break
     # header bits
@@ -123,7 +132,7 @@ def extract_header(audio_data, num_bits, num_lsb):
 
 
 # reads audio file input & selects a channel 
-# get the 32-bit header from extract_header func
+# get the 48-bit header from extract_header func
 # calculate number of samples used for the header
 # use decode_audio to extract payload bits
 # convert extracted bits into bytes (1 byte -> 8 bits)
@@ -170,39 +179,48 @@ def decode_wav_file_gui(stego_path, num_lsb, key):
     audio_data = audio_data.copy()
 
     
-    header_bits = extract_header(audio_data, 32, num_lsb)
+    header_bits = extract_header(audio_data, 48, num_lsb)
     # to convert the bits into int (some will get np.int(16))
     header_bits = [int(b) for b in header_bits]
     # header stores SIZE OF PAYLOAD
-    print(f"Header bits extracted: {header_bits[:32]}")
+    print(f"Header bits extracted: {header_bits[:48]}")
 
     payload_length_bits = 0
-    # header_bits will be 32 so loops for 32
-    for i in header_bits:
-        print(i)
-        # shifts value to the left by 1 bit
-        # then add i (OR)
-        print(f"payload_length_bits: {payload_length_bits}")
-        print(f"after shifting: {payload_length_bits << 1}")
-        # update payload length bits after -> will *2
-        # lets say i is 1, then payload_length_bits will start updating next loop
+    # header_bits will be 48 so loops for 48
+        
+    # shifts value to the left by 1 bit
+    # then add i (OR)
+    # print(f"payload_length_bits: {payload_length_bits}")
+    # print(f"after shifting: {payload_length_bits << 1}")
+    # update payload length bits after -> will *2
+    # lets say i is 1, then payload_length_bits will start updating next loop
 
-        # get length of payload in bits (SIZE)
+    # first 32 bits → payload size
+    for i in header_bits[:32]:
         payload_length_bits = (payload_length_bits << 1) | i
 
-    # * to find out how many samples required to store 32 bits header
-    # ? How many samples do I need to store 32 bits, if each sample can hold num_lsb bits?
+    # next 16 bits → start position
+    start_pos = 0
+    for i in header_bits[32:]:
+        start_pos = (start_pos << 1) | i
+
+    # * to find out how many samples required to store 48 bits header
+    # ? How many samples do I need to store 48 bits, if each sample can hold num_lsb bits?
     # each sample legnth = num_lsb -> we extracted 
     """
         eg: num_lsb = 5
         means each sample currently holds 5 bits 
         1 sample -> 5 bits
-        x samples -> 32 bits -> 32/5 = 6.4 (need to round up to fit) = 7
+        x samples -> 48 bits -> 48/5 = 6.4 (need to round up to fit) = 7
     """
-    header_sample_count = math.ceil(32 / num_lsb)
+    header_sample_count = math.ceil(48 / num_lsb)
+    payload_offset = header_sample_count + start_pos
+
+    print(f"start pos: {start_pos}")
+
 
     # offset as header_sample_count to tell decode to ignore the 7 samples 
-    extracted_bits = decode_audio(audio_data, payload_length_bits, num_lsb, key, offset=header_sample_count)
+    extracted_bits = decode_audio(audio_data, payload_length_bits, num_lsb, key, offset=payload_offset)
 
     # * convert list of extracted payload into bytes
 

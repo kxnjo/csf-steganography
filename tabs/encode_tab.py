@@ -2,7 +2,7 @@ import customtkinter as ctk
 from tkinter import messagebox
 from assets.dragdrop import DragDropLabel
 from encoder_decoder.image_encoder import encode_message as encode_image_message
-from encoder_decoder.audio_encoder import file_to_bits, embed_payload, embed_header
+from encoder_decoder.audio_encoder import file_to_bits, embed_payload, embed_header, create_audio_header
 from scipy.io import wavfile  # Fixed import
 import os
 import numpy as np
@@ -292,18 +292,23 @@ def create_encode_tab(parent):
                     # Read payload bits using audio_encoder function
                     payload_bits = file_to_bits(payload_path)
 
-                    # Create 32-bit header
+                    # Create 48-bit header
                     payload_size = len(payload_bits)
-                    header_bits = [(payload_size >> (31 - i)) & 1 for i in range(32)]
+                    # header_bits = [(payload_size >> (31 - i)) & 1 for i in range(32)]
 
                     # Embed header sequentially
+                    header_bits = create_audio_header(payload_size, start_pos)
                     audio_data = embed_header(audio_data, header_bits, num_lsb)
-                    
+
+                    print(f"[ENCODE] header bits in encode: {header_bits}")
+                    print(f"[ENCODE] payload length: {payload_size}")
+
                     # Calculate how many samples were used for header
-                    header_sample_count = (32 + num_lsb - 1) // num_lsb
+                    header_sample_count = (48 + num_lsb - 1) // num_lsb
+                    payload_offset = header_sample_count + start_pos
 
                     # Embed payload using your audio_encoder function
-                    stego_data = embed_payload(audio_data, payload_bits, num_lsb, key_int, offset=header_sample_count)
+                    stego_data = embed_payload(audio_data, payload_bits, num_lsb, key_int, offset=payload_offset)
                     
                     # Save stego audio
                     base_name = os.path.splitext(cover_path)[0]

@@ -29,6 +29,17 @@ def bits_to_file(bits, filename):
     with open(filename, "wb") as f:
         f.write(bytes_out)
 
+# --- Create 48-bit header: payload_size (32 bits), start_offset (16 bits) ---
+def create_audio_header(payload_bits_len, start_offset):
+    header_bits = []
+    # 32-bit payload size
+    for i in range(32):
+        header_bits.append((payload_bits_len >> (31 - i)) & 1)
+    # 16-bit start position
+    for i in range(16):
+        header_bits.append((start_offset >> (15 - i)) & 1)
+    return header_bits
+
 
 def embed_header(audio_data, header_bits, num_lsb):
     """Embed header bits sequentially into the first samples"""
