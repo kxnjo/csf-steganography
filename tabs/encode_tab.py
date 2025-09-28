@@ -365,7 +365,8 @@ def create_encode_tab(parent):
 
                 audio_cover = extract_audio(cover_path)
                 print(f"audio cover: {audio_cover}")
-                encode_payload_in_audio(audio_cover, payload_path, "stego_audio.wav", num_lsb, key_int)
+
+                encode_payload_in_audio(audio_cover, payload_path, "stego_audio.wav", num_lsb, key_int, start_pos)
                 combine_audio_video(cover_path, "stego_audio.wav")
 
                 if tab_var.get() == "Text Message" and is_temp_file:

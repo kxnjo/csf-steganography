@@ -5,7 +5,7 @@ import os
 class DragDropLabel(ctk.CTkLabel):
     ACCEPTED_EXTENSIONS = (
         ".txt", ".pdf", ".exe", ".png", ".jpg", ".jpeg", ".gif", ".bmp",
-        ".mp3", ".wav", ".ogg", ".flac"
+        ".mp3", ".wav", ".ogg", ".flac", ".mp4"
     )
 
     def __init__(self, parent, text="Drag & Drop or Click to Select File", **kwargs):
@@ -54,12 +54,13 @@ class DragDropLabel(ctk.CTkLabel):
         filepath = filedialog.askopenfilename(
             title="Select File",
             filetypes=[
-                ("All supported files", "*.txt *.pdf *.exe *.png *.jpg *.jpeg *.gif *.bmp *.mp3 *.wav *.ogg *.flac"),
+                ("All supported files", "*.txt *.pdf *.exe *.png *.jpg *.jpeg *.gif *.bmp *.mp3 *.wav *.ogg *.flac *.mp4"),
                 ("Text files", "*.txt"),
                 ("PDF files", "*.pdf"),
                 ("Images", "*.png *.jpg *.jpeg *.gif *.bmp"),
                 ("Executables", "*.exe"),
                 ("Audio files", "*.mp3 *.wav *.ogg *.flac"),
+                ("Video files", "*.mp4"),
                 ("All files", "*.*")
             ]
         )

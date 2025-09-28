@@ -4,6 +4,7 @@ import os
 from tkinter import messagebox, filedialog
 from encoder_decoder.image_decoder import decode_image
 from encoder_decoder.audio_decode import decode_wav_file_gui
+from encoder_decoder.video import extract_audio
 import numpy as np
 from scipy.io import wavfile
 import random
@@ -174,6 +175,23 @@ def create_decode_tab(parent):
             label.configure(image=img_ctk, text=info_text, compound="top")
             label.image = img_ctk
 
+        elif ext == ".mp4":
+            import cv2
+            cap = cv2.VideoCapture(path)
+            ret, frame = cap.read()
+            cap.release()
+            if ret:
+                # Convert BGR (OpenCV) → RGB (PIL)
+                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                img = Image.fromarray(frame)
+                img.thumbnail((250, 250))
+                img_ctk = ctk.CTkImage(light_image=img, dark_image=img, size=(250, 250))
+                label.configure(image=img_ctk, text="")
+                label.image = img_ctk
+            else:
+                label.configure(text=f"Cannot read video frames:\n{os.path.basename(path)}", image=None)
+
+
         # for others
         else:
             label.configure(
@@ -312,7 +330,13 @@ def create_decode_tab(parent):
                 
             elif ext in [".png", ".jpg", ".jpeg", ".bmp", ".gif"]:
                 payload_bytes, _ = decode_image(stego_path, key_text)
-                
+            
+            # Inside run_decode(), replacing video decoding part
+            elif ext in [".mp4", ".mkv"]:
+                key_int = int(key_text)
+                extract_audio(stego_path)
+                payload_bytes = decode_wav_file_gui("stego_audio.wav", num_lsb, key_int)
+
             else:
                 raise ValueError("Unsupported file type. Use image (.png, .jpg, .bmp) or audio (.wav) files.")
 

@@ -2,6 +2,7 @@ from PIL import Image
 from scipy.io import wavfile
 import os
 import numpy as np
+import cv2
 
 def calculate_cover_capacity(cover_path: str, num_lsb: int) -> int:
     """
@@ -37,6 +38,17 @@ def calculate_cover_capacity(cover_path: str, num_lsb: int) -> int:
                 channels = 1
                 samples = audio_data.shape[0]
             max_bits = samples * channels * num_lsb
+
+        elif ext == ".mp4":
+            cap = cv2.VideoCapture(cover_path)
+            if not cap.isOpened():
+                return None
+            frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            channels = 3  # assuming RGB frames
+            max_bits = frames * width * height * channels * num_lsb
+            cap.release()
 
         else:
             return None
