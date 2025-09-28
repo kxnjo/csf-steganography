@@ -212,11 +212,8 @@ def create_encode_tab(parent):
                 else:
                     payload_bytes = b""
 
-            print(f" check fit PAYLOAD: {payload_bytes}")
-
             result = check_fit(cover_path, num_lsb, payload_bytes)
 
-            print(f"results: {result}")
             max_bits = result["max_bits"]
             payload_bits = result["payload_bits"]
             fit_text = "✅ Fits" if result["fit"] else "❌ Too Large"
