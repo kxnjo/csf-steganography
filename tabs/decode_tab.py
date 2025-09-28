@@ -334,8 +334,8 @@ def create_decode_tab(parent):
             # Inside run_decode(), replacing video decoding part
             elif ext in [".mp4", ".mkv"]:
                 key_int = int(key_text)
-                extract_audio(stego_path)
-                payload_bytes = decode_wav_file_gui("stego_audio.wav", num_lsb, key_int)
+                audio_file = extract_audio(stego_path)
+                payload_bytes = decode_wav_file_gui(audio_file, num_lsb, key_int)
 
             else:
                 raise ValueError("Unsupported file type. Use image (.png, .jpg, .bmp) or audio (.wav) files.")
