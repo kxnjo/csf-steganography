@@ -3,8 +3,10 @@ from tkinter import messagebox
 from assets.dragdrop import DragDropLabel
 from encoder_decoder.image_encoder import encode_message as encode_image_message
 from encoder_decoder.audio_encoder import file_to_bits, embed_payload, embed_header, create_audio_header
+from encoder_decoder.video import extract_audio, encode_payload_in_audio, combine_audio_video
 from scipy.io import wavfile  # Fixed import
 import os
+import random
 import numpy as np
 import tempfile  # For creating temporary files for text payloads
 
@@ -13,6 +15,8 @@ import wave
 import matplotlib.pyplot as plt
 import io
 # import simpleaudio as sa
+
+import cv2 # opencv for reading/writing video frames
 
 from assets.ScrollableFrame import ScrollableFrame  # custom scrollable frame
 
@@ -67,6 +71,23 @@ def create_encode_tab(parent):
             # Update preview
             label.configure(image=img_ctk, text=info_text, compound="top")
             label.image = img_ctk
+
+        elif ext == ".mp4":
+            import cv2
+            cap = cv2.VideoCapture(path)
+            ret, frame = cap.read()
+            cap.release()
+            if ret:
+                # Convert BGR (OpenCV) → RGB (PIL)
+                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                img = Image.fromarray(frame)
+                img.thumbnail((250, 250))
+                img_ctk = ctk.CTkImage(light_image=img, dark_image=img, size=(250, 250))
+                label.configure(image=img_ctk, text="")
+                label.image = img_ctk
+            else:
+                label.configure(text=f"Cannot read video frames:\n{os.path.basename(path)}", image=None)
+
 
         # for others
         else:
@@ -319,6 +340,39 @@ def create_encode_tab(parent):
                     # Clean up temporary file if we created one
                     if tab_var.get() == "Text Message" and is_temp_file:
                         os.unlink(payload_path)
+
+            elif cover_ext == ".mp4":
+                # --- Video encoding ---
+                if tab_var.get() == "Text Message":
+                    message = msg_entry.get("1.0", "end").strip()
+                    if not message:
+                        raise ValueError("Enter a message to encode.")
+                    temp_file = tempfile.NamedTemporaryFile(mode='w', delete=False, encoding='utf-8')
+                    temp_file.write(message)
+                    temp_file.close()
+                    payload_path = temp_file.name
+                    is_temp_file = True
+                else:
+                    payload_path = file_payload.get_file_path()
+                    if not payload_path or not os.path.isfile(payload_path):
+                        raise ValueError("Select a valid payload file.")
+                    is_temp_file = False
+
+                # Read cover video
+                # print(f"cover_oath {cover_path}")
+                
+                extract_audio(cover_path)
+
+                audio_cover = extract_audio(cover_path)
+                print(f"audio cover: {audio_cover}")
+                encode_payload_in_audio(audio_cover, payload_path, "stego_audio.wav", num_lsb, key_int)
+                combine_audio_video(cover_path, "stego_audio.wav")
+
+                if tab_var.get() == "Text Message" and is_temp_file:
+                    os.unlink(payload_path)
+
+                output_path = f"{os.path.splitext(cover_path)[0]}_stego.mp4"
+
 
             else:
                 raise ValueError("Unsupported cover file type. Use images (.png, .jpg, .bmp) or audio (.wav)")
