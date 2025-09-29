@@ -8,15 +8,8 @@ import os
 from encoder_decoder.audio_encoder import file_to_bits, embed_payload, embed_header, create_audio_header
 
 def extract_audio(mp4_path, wav_out="cover_audio.wav"):
-    # Auto-rename if file exists
-    base, ext = os.path.splitext(wav_out)
-    counter = 1
-    while os.path.exists(wav_out):
-        wav_out = f"{base}_{counter}{ext}"
-        counter += 1
-
     subprocess.run([
-        "ffmpeg.exe", "-i", mp4_path, "-vn",
+        "ffmpeg.exe", "-y", "-i", mp4_path, "-vn",
         "-acodec", "pcm_s16le", "-ar", "44100", "-ac", "2", wav_out
     ])
 
@@ -42,15 +35,8 @@ def encode_payload_in_audio(wav_path, payload_path, stego_wav_path, num_lsb, key
     wavfile.write(stego_wav_path, samplerate, stego_data.astype(np.int16))
 
 def combine_audio_video(original_video, stego_audio, output_video="stego_video.mp4"):
-    # Auto-rename if file exists
-    base, ext = os.path.splitext(output_video)
-    counter = 1
-    while os.path.exists(output_video):
-        output_video = f"{base}_{counter}{ext}"
-        counter += 1
-
     subprocess.run([
-        "ffmpeg.exe", "-i", original_video, "-i", stego_audio,
+        "ffmpeg.exe","-y", "-i", original_video, "-i", stego_audio,
         "-c:v", "copy", "-map", "0:v:0", "-map", "1:a:0", "-shortest", output_video
     ])
 
