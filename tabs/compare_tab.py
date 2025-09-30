@@ -114,20 +114,26 @@ def show_stats(original, suspect, container, mode="image"):
     row.pack(fill="x", pady=5)
 
     if mode == "image":
-        # pixel difference %
+        # Display the percentage of pixel difference
         diff = np.abs(suspect - original)
         changed_pixels = int(np.count_nonzero(diff))
         total_pixels = int(diff.size)
         diff_percent = (changed_pixels / max(1,total_pixels)) * 100
 
-        # entropy (image)
+        # shannon entropy: uncertainty or randomness in information
+        # the higher the value = more uncertainty = harder to predict = more likely to have changed
+        # the lower the value = more predictable = lesser changes
         orig_entropy = shannon_entropy(original)
         suspect_entropy = shannon_entropy(suspect)
 
-        # χ² (image bins)
-        ho, _ = np.histogram(original, bins=256, range=(0,255))
-        hs, _ = np.histogram(suspect,  bins=256, range=(0,255))
+        # Chi-Square Test χ² (image bins = image categories (1 or 0) values )
+        # checks whether the observed frequencies in the bins deviate significantly from what’s expected.
+        # detects "uniform"/"randomness" in each pixel
+        image_bins = 64 # for unnatural pixel distribution
+        ho, _ = np.histogram(original, bins=image_bins, range=(0,255))
+        hs, _ = np.histogram(suspect,  bins=image_bins, range=(0,255))
         chi, p = chisquare(f_obs=hs + 1, f_exp=ho + 1)
+        chi_dev = chi / (image_bins - 1)
 
     else:
         # audio: quantize to 8-bit for entropy/χ²
@@ -142,15 +148,18 @@ def show_stats(original, suspect, container, mode="image"):
         orig_entropy   = shannon_entropy(qo)
         suspect_entropy= shannon_entropy(qs)
 
-        ho, _ = np.histogram(qo, bins=256, range=(0,255))
-        hs, _ = np.histogram(qs, bins=256, range=(0,255))
+        audio_bins = 256
+        ho, _ = np.histogram(qo, bins=audio_bins, range=(0,255))
+        hs, _ = np.histogram(qs, bins=audio_bins, range=(0,255))
         chi, p = chisquare(f_obs=hs + 1, f_exp=ho + 1)
+        chi_dev = chi / (audio_bins - 1)
 
     # Cards
     create_stat_card(row, "Diff %", f"{diff_percent:.2f}%", f"Changed: {changed_pixels}/{total_pixels}", "orange")
     create_stat_card(row, "Entropy (Orig.)", f"{orig_entropy:.3f} bits", "", "cyan")
     create_stat_card(row, "Entropy (Sus.)", f"{suspect_entropy:.3f} bits", "", "cyan")
-    create_stat_card(row, "Chi-Square", f"{chi:.2f}", f"p = {p:.3e}", "lightgreen" if p > 0.05 else "red")
+    chi_text = "bigger" if chi_dev > 1 else "smaller"
+    create_stat_card(row, "Chi-Square Deviation", f"{chi_dev:.2f}x {chi_text} than original", f"p = {p:.3e}", "lightgreen" if p > 0.05 else "red")
 
 
 
@@ -187,8 +196,9 @@ def show_chisquare_heatmap(original, suspect, result_label, block_size=16):
 
         for i in range(0, h, block_size):
             for j in range(0, w, block_size):
+                # walk through all the steps in chunks, extract 1 block at a time from both suspect and original
                 block_orig = original[
-                    i : min(i + block_size, h), j : min(j + block_size, w)
+                    i : min(i + block_size, h), j : min(j + block_size, w) # use minimum to avoid out of bounds at edges
                 ]
                 block_sus = suspect[
                     i : min(i + block_size, h), j : min(j + block_size, w)
@@ -200,18 +210,21 @@ def show_chisquare_heatmap(original, suspect, result_label, block_size=16):
                 orig_hist, _ = np.histogram(block_orig, bins=256, range=(0, 255))
                 sus_hist, _ = np.histogram(block_sus, bins=256, range=(0, 255))
 
-                chi, _ = chisquare(f_obs=sus_hist + 1, f_exp=orig_hist + 1)
+                chi, _ = chisquare(f_obs=sus_hist + 1, f_exp=orig_hist + 1) # calculate actual chi square, +1 to avoid division by zero
+                # larger chi square value = more suspicious, 
+                # smaller chi square value = less suspicious
 
-                # compute safe indices
+                # compute safe indices, store chi square score
                 idx_i = i // block_size
                 idx_j = j // block_size
                 if idx_i < heatmap_h and idx_j < heatmap_w:
                     heatmap[idx_i, idx_j] = chi
 
-        # normalize heatmap (0–255)
+        # normalize heatmap (0–255) for display
         heatmap_norm = (heatmap / np.max(heatmap)) * 255
         heatmap_img = Image.fromarray(heatmap_norm.astype(np.uint8))
 
+        # display the chisquare heatmap
         img_ctk = ctk.CTkImage(
             light_image=heatmap_img, dark_image=heatmap_img, size=(400, 300)
         )
@@ -410,7 +423,7 @@ def block_chi_heatmap_values(original, suspect, block_size=16):
 def calculate_image_suspicion(original, suspect):
     # 1) SSIM (1 - SSIM → more suspicious)
     ssim_val = ssim(original, suspect, data_range=255)
-    ssim_score = normalize_metric(1.0 - ssim_val, 0.0, 0.4)   # >0.4 diff = strong
+    ssim_score = normalize_metric(1.0 - ssim_val, 0.0, 0.4)   # >0.4 diff = strong, 1 - SSIM to add on to suspicion score
 
     # 2) LSB flip-rate
     lsb_rate = lsb_flip_rate(original, suspect)               # 0..1
@@ -419,7 +432,7 @@ def calculate_image_suspicion(original, suspect):
     # 3) Block χ² (use 90th percentile to focus on hotspots)
     heat = block_chi_heatmap_values(original, suspect, block_size=16)
     if np.max(heat) > 0:
-        chi_p90 = np.percentile(heat, 90)
+        chi_p90 = np.percentile(heat, 90)                     # only pick values from the 90th percentile
         chi_score = normalize_metric(chi_p90, 0.0, np.max(heat))
     else:
         chi_score = 0.0
@@ -486,7 +499,6 @@ def calculate_audio_suspicion(original, suspect, rate):
     return float(np.clip(suspicion, 0, 1))
 
 def add_suspicion_card(container, score):
-    print("SUS CARD IS HERE")
     if score >= 0.6:
         color = "red"
         verdict = "Highly Likely Stego"
@@ -498,7 +510,6 @@ def add_suspicion_card(container, score):
         verdict = "Likely Clean"
 
     create_stat_card(container, "Suspicion Score", f"{score:.2f}", verdict, color)
-    print("sus card done i think")
 
 
 # = = = PARENT FUNC ACTUAL SHOWING = = =
@@ -506,17 +517,14 @@ def add_suspicion_card(container, score):
 
 # --- parent func to call the other comparisons ---
 def run_comparison(original_label, suspect_label, bottom_frame):
-    print("CLICKED !@!!! KSABDAJSKN")
     original_path = original_label.get_file_path()
     suspect_path = suspect_label.get_file_path()
 
-    print(f"this is original: {original_path}")
-    print(f"this is suspect: {suspect_path}")
-    # 4. clear old results
+    # 1. clear old results
     for widget in bottom_frame.winfo_children():
         widget.destroy()
 
-    # 1. compare if the original and suspect path is uploaded
+    # 2. compare if the original and suspect path is uploaded
     if not original_path or not suspect_path:
         print("⚠️ Please select both files before comparing.")
         # --- add Compare button back ---
@@ -538,7 +546,7 @@ def run_comparison(original_label, suspect_label, bottom_frame):
     )
     compare_btn.pack(pady=10)
 
-    # 2. ensure that the files uploaded is approved
+    # 3. ensure that the files uploaded is approved
     ext = os.path.splitext(original_path)[1].lower()
     if ext in IMAGE_EXTS:
         mode = "image"
@@ -548,11 +556,11 @@ def run_comparison(original_label, suspect_label, bottom_frame):
         print("⚠️ Unsupported file type")
         return
 
-    # 3. load file based on file type
+    # 4. load file based on file type
     if mode == "image":
         try:
-            original = np.array(Image.open(original_path).convert("L"))
-            suspect = np.array(Image.open(suspect_path).convert("L"))
+            original = np.array(Image.open(original_path).convert("L")) # make the images greyscale
+            suspect = np.array(Image.open(suspect_path).convert("L")) # make the images greyscale
         except Exception as e:
             print(f"Error loading images: {e}")
             return
@@ -575,7 +583,7 @@ def run_comparison(original_label, suspect_label, bottom_frame):
             print(f"Error loading audios: {e}")
             return
 
-    # 4. This is the final widget to show final suspicion score
+    # 5. This is the final widget to show final suspicion score
     suspicious_container = ctk.CTkFrame(bottom_frame, fg_color="transparent")
     suspicious_container.pack(fill="x", padx=10, pady=10)
     if mode == "image":
@@ -585,7 +593,7 @@ def run_comparison(original_label, suspect_label, bottom_frame):
         score = calculate_audio_suspicion(original, suspect, sus_rate)
         add_suspicion_card(suspicious_container, score)
 
-    # 5. show all the default widgets
+    # 6. show all the default widgets
     # --- stats container (row of cards) ---
     stats_container = ctk.CTkFrame(bottom_frame, fg_color="transparent")
     stats_container.pack(fill="x", padx=10, pady=10)
@@ -605,9 +613,8 @@ def run_comparison(original_label, suspect_label, bottom_frame):
     else:
         show_histogram(original, suspect, hist_label, bins=100)
 
-    # 6. load all of the widgets (based on file type)
+    # 7. load all of the widgets (based on file type)
     if mode == "image":
-        # --- row for chi-square + residual ---
         row_frame = ctk.CTkFrame(bottom_frame, fg_color="transparent")
         row_frame.pack(expand=True, fill="both", padx=5, pady=5)
 
